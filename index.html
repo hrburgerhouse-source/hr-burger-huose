@@ -26,6 +26,7 @@
 <title>HR Burger House - Sistema de Ventas</title>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{--primary:#e67e22;--primary-dark:#d35400;--secondary:#c0392b;--dark:#2c3e50;--success:#27ae60;--danger:#e74c3c;--light:#f5f6fa;--shadow:0 2px 12px rgba(0,0,0,0.1);--radius:10px}
@@ -660,6 +661,32 @@ textarea.form-input{height:130px;resize:vertical;font-family:monospace;font-size
         <button class="btn btn-primary" onclick="App.saveSettings()">💾 Guardar Ajustes</button>
       </div>
       <div class="form-card" style="margin-top:16px">
+        <div class="form-card-title">📧 Reporte de Ventas por Correo (EmailJS)</div>
+        <div class="form-group"><label class="form-label">Public Key</label><input type="text" class="form-input" id="cfg-ejs-pubkey" placeholder="abc123..."></div>
+        <div class="form-group"><label class="form-label">Service ID</label><input type="text" class="form-input" id="cfg-ejs-service" placeholder="service_abc123"></div>
+        <div class="form-group"><label class="form-label">Template ID</label><input type="text" class="form-input" id="cfg-ejs-template" placeholder="template_abc123"></div>
+        <div class="form-group"><label class="form-label">Correo destinatario</label><input type="email" class="form-input" id="cfg-ejs-email" placeholder="correo@ejemplo.com"></div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap">
+          <div class="form-group" style="flex:1;min-width:140px"><label class="form-label">Hora 1 (ej. 22:00)</label><input type="time" class="form-input" id="cfg-ejs-hora1" value="22:00"></div>
+          <div class="form-group" style="flex:1;min-width:140px"><label class="form-label">Hora 2 (opcional)</label><input type="time" class="form-input" id="cfg-ejs-hora2" placeholder="--:--"></div>
+        </div>
+        <div class="form-group"><label class="form-label">Días de envío</label>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">
+            <label style="display:flex;align-items:center;gap:4px;font-size:.9rem"><input type="checkbox" id="cfg-ejs-d0" value="0"> Dom</label>
+            <label style="display:flex;align-items:center;gap:4px;font-size:.9rem"><input type="checkbox" id="cfg-ejs-d1" value="1"> Lun</label>
+            <label style="display:flex;align-items:center;gap:4px;font-size:.9rem"><input type="checkbox" id="cfg-ejs-d2" value="2"> Mar</label>
+            <label style="display:flex;align-items:center;gap:4px;font-size:.9rem"><input type="checkbox" id="cfg-ejs-d3" value="3"> Mié</label>
+            <label style="display:flex;align-items:center;gap:4px;font-size:.9rem"><input type="checkbox" id="cfg-ejs-d4" value="4"> Jue</label>
+            <label style="display:flex;align-items:center;gap:4px;font-size:.9rem"><input type="checkbox" id="cfg-ejs-d5" value="5"> Vie</label>
+            <label style="display:flex;align-items:center;gap:4px;font-size:.9rem"><input type="checkbox" id="cfg-ejs-d6" value="6"> Sáb</label>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-primary" onclick="App.saveSettings()">💾 Guardar Ajustes</button>
+          <button class="btn btn-outline" onclick="App.sendDailyReport(true)">📤 Enviar reporte ahora</button>
+        </div>
+      </div>
+      <div class="form-card" style="margin-top:16px">
         <div class="form-card-title">🔄 Actualización</div>
         <div style="font-size:.85rem;color:#666;margin-bottom:12px">Si el sistema no muestra los últimos cambios, presiona este botón.</div>
         <button class="btn btn-outline" onclick="App.forceUpdate()">🔄 Actualizar App Ahora</button>
@@ -813,6 +840,7 @@ const App=(()=>{
     showScreen('screen-login');
     const cfg=getCfg();
     if($('login-biz-name'))$('login-biz-name').textContent=cfg.name||'HR BURGER HOUSE';
+    _startReportScheduler();
   }
 
   async function seedAndListen(){
@@ -1353,13 +1381,55 @@ const App=(()=>{
   async function deletePromo(id){if(!await showConfirm('Eliminar esta promocion?'))return;writePromos(getPromos().filter(p=>p.id!==id));renderPromosList();toast('Eliminada','error');}
   function renderPromosList(){const el=document.getElementById('promo-list-admin');if(!el)return;const promos=getPromos();if(!promos.length){el.innerHTML='<span style="color:#ccc">Sin promociones aun</span>';return;}el.innerHTML='<div class="promo-list">'+promos.map(p=>'<div class="promo-item"><div><div class="promo-name">'+p.name+'</div><div class="promo-val">'+(p.type==='pct'?p.value+'% de descuento':'$'+p.value+' de descuento')+'</div></div><button class="btn btn-sm btn-danger" onclick="App.deletePromo(\''+p.id+'\')">🗑️</button></div>').join('')+'</div>';}  function goTab(t){document.querySelectorAll('.admin-body>div').forEach(d=>d.style.display='none');document.querySelectorAll('.admin-tab').forEach(b=>b.classList.remove('active'));const tabs={products:0,categories:1,promos:2,inventory:3,sales:4,settings:5};$('tab-'+t).style.display='block';document.querySelectorAll('.admin-tab')[tabs[t]].classList.add('active');if(t==='sales')renderSales();if(t==='products'){fillCatSelect();renderProdTable();}if(t==='categories')renderCatsList();if(t==='promos')renderPromosList();if(t==='inventory'){renderInventory();loadInvLog();}if(t==='settings')loadCfg();}
 
-  function loadCfg(){const c=getCfg();$('cfg-name').value=c.name||'';$('cfg-tel').value=c.tel||'';$('cfg-addr').value=c.addr||'';$('cfg-msg').value=c.msg||'';$('cfg-pin').value=c.pin||'';$('cfg-alert-email').value=c.alertEmail||'';$('cfg-gas').value=c.gas||'';}
-  function saveSettings(){const cfg={name:$('cfg-name').value.trim()||'HR BURGER HOUSE',tel:$('cfg-tel').value.trim(),addr:$('cfg-addr').value.trim(),msg:$('cfg-msg').value.trim()||'¡Gracias por su preferencia!',pin:$('cfg-pin').value.trim()||'1234',alertEmail:$('cfg-alert-email').value.trim(),gas:$('cfg-gas').value.trim()};writeCfg(cfg);toast('✅ Ajustes guardados');}
+  function loadCfg(){const c=getCfg();$('cfg-name').value=c.name||'';$('cfg-tel').value=c.tel||'';$('cfg-addr').value=c.addr||'';$('cfg-msg').value=c.msg||'';$('cfg-pin').value=c.pin||'';$('cfg-alert-email').value=c.alertEmail||'';$('cfg-gas').value=c.gas||'';$('cfg-ejs-pubkey').value=c.ejsPubKey||'';$('cfg-ejs-service').value=c.ejsService||'';$('cfg-ejs-template').value=c.ejsTemplate||'';$('cfg-ejs-email').value=c.ejsEmail||'';$('cfg-ejs-hora1').value=c.ejsHora1||'22:00';$('cfg-ejs-hora2').value=c.ejsHora2||'';const days=c.ejsDays||[1,2,3,4,5,6,0];[0,1,2,3,4,5,6].forEach(d=>{const el=$('cfg-ejs-d'+d);if(el)el.checked=days.includes(d);});}
+  function saveSettings(){const days=[];[0,1,2,3,4,5,6].forEach(d=>{const el=$('cfg-ejs-d'+d);if(el&&el.checked)days.push(d);});const cfg={name:$('cfg-name').value.trim()||'HR BURGER HOUSE',tel:$('cfg-tel').value.trim(),addr:$('cfg-addr').value.trim(),msg:$('cfg-msg').value.trim()||'¡Gracias por su preferencia!',pin:$('cfg-pin').value.trim()||'1234',alertEmail:$('cfg-alert-email').value.trim(),gas:$('cfg-gas').value.trim(),ejsPubKey:$('cfg-ejs-pubkey').value.trim(),ejsService:$('cfg-ejs-service').value.trim(),ejsTemplate:$('cfg-ejs-template').value.trim(),ejsEmail:$('cfg-ejs-email').value.trim(),ejsHora1:$('cfg-ejs-hora1').value||'22:00',ejsHora2:$('cfg-ejs-hora2').value||'',ejsDays:days};writeCfg(cfg);toast('✅ Ajustes guardados');}
 
   function forceUpdate(){
     if('caches' in window)caches.keys().then(ks=>Promise.all(ks.map(k=>caches.delete(k))));
     if('serviceWorker' in navigator)navigator.serviceWorker.getRegistrations().then(regs=>regs.forEach(r=>r.unregister()));
     window.location.reload(true);
+  }
+  async function sendDailyReport(manual=false){
+    const cfg=getCfg();
+    if(!cfg.ejsPubKey||!cfg.ejsService||!cfg.ejsTemplate||!cfg.ejsEmail){
+      toast('Configura EmailJS en Ajustes primero','error');return;
+    }
+    const today=localDate();
+    const sales=getSales().filter(s=>localDate(s.date)===today);
+    const totalVentas=sales.length;
+    const totalIngresos=sales.reduce((a,s)=>a+s.total,0);
+    const efectivo=sales.filter(s=>s.pay==='cash').reduce((a,s)=>a+s.total,0);
+    const tarjeta=sales.filter(s=>s.pay==='card').reduce((a,s)=>a+s.total,0);
+    const personal=sales.filter(s=>s.pay==='personal').reduce((a,s)=>a+s.total,0);
+    const detalle=sales.length?sales.map((s,i)=>'#'+(i+1)+' '+new Date(s.date).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})+' — $'+s.total.toFixed(2)+' ('+({cash:'Efectivo',card:'Tarjeta',personal:'Personal'}[s.pay]||s.pay)+')').join('\n'):'Sin ventas registradas hoy.';
+    const now=new Date();
+    const params={fecha:today,hora:now.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}),total_ventas:totalVentas,total_ingresos:totalIngresos.toFixed(2),efectivo:efectivo.toFixed(2),tarjeta:tarjeta.toFixed(2),personal:personal.toFixed(2),detalle,to_email:cfg.ejsEmail};
+    try{
+      emailjs.init(cfg.ejsPubKey);
+      await emailjs.send(cfg.ejsService,cfg.ejsTemplate,params);
+      if(!manual)localStorage.setItem('_ejsLastSent',today+'|'+now.getHours()+':'+String(now.getMinutes()).padStart(2,'0'));
+      toast('📧 Reporte enviado correctamente');
+    }catch(e){
+      toast('Error al enviar: '+(e.text||e.message||JSON.stringify(e)),'error');
+    }
+  }
+  function _startReportScheduler(){
+    setInterval(()=>{
+      const cfg=getCfg();
+      if(!cfg.ejsPubKey||!cfg.ejsService||!cfg.ejsTemplate||!cfg.ejsEmail)return;
+      const now=new Date();
+      const dayOk=(cfg.ejsDays||[0,1,2,3,4,5,6]).includes(now.getDay());
+      if(!dayOk)return;
+      const hhmm=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
+      const hora1=(cfg.ejsHora1||'22:00').slice(0,5);
+      const hora2=(cfg.ejsHora2||'').slice(0,5);
+      const match=(hhmm===hora1)||(hora2&&hhmm===hora2);
+      if(!match)return;
+      const key=localDate()+'|'+hhmm;
+      if(localStorage.getItem('_ejsLastSent')===key)return;
+      localStorage.setItem('_ejsLastSent',key);
+      sendDailyReport(false);
+    },60000);
   }
   function openPrinterModal(){BTPrinter.updateUI();$('modal-printer').classList.add('show');}
   function closePrinterModal(){$('modal-printer').classList.remove('show');}
@@ -1378,7 +1448,7 @@ const App=(()=>{
       {type:'center',text:'¡Listo para imprimir!'},
     ])).then(()=>toast('Prueba enviada'));
   }
-  return{init,saveFirebaseConfig,resetFirebase,loginCajera,confirmCajera,closeModalCajera,logout,showPin,closePin,pinKey,pinDel,pinEnter,setFilterCat,renderProducts,addToCart,changeQty,clearCart,openCheckout,closeCheckout,selPay,calcChange,calcDiscount,applyPromo,setDiscType,completeSale,openMiHistorial,closeMiHistorial,openCorte,closeCorte,printCorte,openPrinterModal,closePrinterModal,forceUpdate,goTab,saveProduct,editProduct,cancelEdit,deleteProd,toggleProd,renderProdTable,addCat,delCat,renderSales,reprint,clearSales,exportCSV,saveSettings,switchTab,savePromo,deletePromo,renderPromosList,btConnect,btDisconnect,btTest,renderInventory,addInvItem,deleteInvItem,adjustStock,saveInvQty,startInvEdit,cancelInvEdit,saveInvEdit,openInvEmojiPicker,reloadInventory,loadInvLog,clearInvLog,sendTestEmail,sendStockAlert,addRecipeRow,removeRecipeRow,renderRecipe};
+  return{init,saveFirebaseConfig,resetFirebase,loginCajera,confirmCajera,closeModalCajera,logout,showPin,closePin,pinKey,pinDel,pinEnter,setFilterCat,renderProducts,addToCart,changeQty,clearCart,openCheckout,closeCheckout,selPay,calcChange,calcDiscount,applyPromo,setDiscType,completeSale,openMiHistorial,closeMiHistorial,openCorte,closeCorte,printCorte,openPrinterModal,closePrinterModal,forceUpdate,goTab,saveProduct,editProduct,cancelEdit,deleteProd,toggleProd,renderProdTable,addCat,delCat,renderSales,reprint,clearSales,exportCSV,saveSettings,switchTab,savePromo,deletePromo,renderPromosList,btConnect,btDisconnect,btTest,renderInventory,addInvItem,deleteInvItem,adjustStock,saveInvQty,startInvEdit,cancelInvEdit,saveInvEdit,openInvEmojiPicker,reloadInventory,loadInvLog,clearInvLog,sendTestEmail,sendStockAlert,addRecipeRow,removeRecipeRow,renderRecipe,sendDailyReport};
 })();
 document.addEventListener('DOMContentLoaded',()=>App.init());
 </script>

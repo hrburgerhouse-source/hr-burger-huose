@@ -911,7 +911,7 @@ const App=(()=>{
         lines.push({type:'row',left:'Subtotal',right:fmt(sale.subtotal)});
         lines.push({type:'row',left:'Descuento',right:'-'+fmt(sale.discount)});
       }
-      lines.push({type:'row',bold:true,big:true,left:'TOTAL',right:fmt(sale.total)});
+      lines.push({type:'row',left:'TOTAL',right:fmt(sale.total)});
       if(sale.pay==='cash'){
         lines.push({type:'row',left:'Recibido',right:fmt(sale.received)});
         lines.push({type:'row',left:'Cambio',right:fmt(change)});

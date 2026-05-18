@@ -3,6 +3,19 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script>
+(function(){
+  var V='6';
+  var stored=localStorage.getItem('hrb-v');
+  if(stored&&stored!==V){
+    localStorage.setItem('hrb-v',V);
+    if('caches' in window)caches.keys().then(function(ks){ks.forEach(function(k){caches.delete(k);});});
+    location.reload(true);
+  } else {
+    localStorage.setItem('hrb-v',V);
+  }
+})();
+</script>
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">

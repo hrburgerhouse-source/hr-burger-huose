@@ -317,6 +317,7 @@ textarea.form-input{height:130px;resize:vertical;font-family:monospace;font-size
         <div style="font-size:.75rem;opacity:.82">Orden <span id="order-num-display">#001</span></div>
       </div>
       <button class="btn btn-ghost" onclick="App.openMiHistorial()">📜 Historial</button>
+      <button class="btn btn-ghost" id="cashier-bt-btn" onclick="App.openPrinterModal()" title="Configurar impresora">🖨️ <span id="cashier-bt-dot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ff6b6b;vertical-align:middle;margin-left:2px"></span></button>
       <button class="btn" style="background:rgba(255,255,255,.15);color:white;border:1.5px solid rgba(255,255,255,.35)" onclick="App.openCorte()">📋 Corte de Caja</button>
       <button class="btn btn-ghost" onclick="App.logout()">Salir ✕</button>
     </div>
@@ -380,6 +381,22 @@ textarea.form-input{height:130px;resize:vertical;font-family:monospace;font-size
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="App.closeCheckout()">Cancelar</button>
       <button class="btn btn-success btn-lg" onclick="App.completeSale()">✅ Completar Venta</button>
+    </div>
+  </div>
+</div>
+<!-- MODAL IMPRESORA -->
+<div id="modal-printer" class="modal-overlay">
+  <div class="modal" style="max-width:340px;text-align:center">
+    <div class="modal-title">🖨️ Impresora Bluetooth</div>
+    <div class="bt-status" style="justify-content:center;margin-bottom:18px">
+      <div class="bt-dot" id="modal-bt-dot"></div>
+      <div style="text-align:left"><div class="bt-label" id="modal-bt-label">Sin conexión</div><div class="bt-sublabel" id="modal-bt-sublabel">Rongta RPP02A</div></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <button class="btn btn-primary" id="modal-bt-connect" onclick="App.btConnect()">🔵 Conectar Impresora</button>
+      <button class="btn btn-outline" id="modal-bt-disconnect" style="display:none" onclick="App.btDisconnect()">Desconectar</button>
+      <button class="btn btn-outline" onclick="App.btTest()">🖨️ Imprimir Prueba</button>
+      <button class="btn btn-ghost" style="color:#aaa" onclick="App.closePrinterModal()">Cerrar</button>
     </div>
   </div>
 </div>
@@ -580,10 +597,18 @@ const BTPrinter=(function(){
   ];
   function isConnected(){return!!_char;}
   function _ui(){
+    const connected=isConnected();
+    const name=connected?(_dev?.name||'Impresora'):'Sin conexión';
+    const sub2=connected?'Lista para imprimir':'Rongta RPP02A';
+    // Ajustes (admin)
     const dot=document.getElementById('bt-dot'),lbl=document.getElementById('bt-label'),sub=document.getElementById('bt-sublabel'),bc=document.getElementById('bt-connect-btn'),bd=document.getElementById('bt-disconnect-btn');
-    if(!dot)return;
-    if(isConnected()){dot.className='bt-dot connected';lbl.textContent='Conectada: '+(_dev?.name||'Impresora');sub.textContent='Lista para imprimir';if(bc)bc.style.display='none';if(bd)bd.style.display='';}
-    else{dot.className='bt-dot';lbl.textContent='Sin conexión';sub.textContent='Rongta RPP02A';if(bc)bc.style.display='';if(bd)bd.style.display='none';}
+    if(dot){dot.className='bt-dot'+(connected?' connected':'');lbl.textContent=connected?'Conectada: '+name:'Sin conexión';sub.textContent=sub2;if(bc)bc.style.display=connected?'none':'';if(bd)bd.style.display=connected?'':'none';}
+    // Modal cajera
+    const mdot=document.getElementById('modal-bt-dot'),mlbl=document.getElementById('modal-bt-label'),msub=document.getElementById('modal-bt-sublabel'),mbc=document.getElementById('modal-bt-connect'),mbd=document.getElementById('modal-bt-disconnect');
+    if(mdot){mdot.className='bt-dot'+(connected?' connected':'');mlbl.textContent=connected?'Conectada: '+name:'Sin conexión';msub.textContent=sub2;if(mbc)mbc.style.display=connected?'none':'';if(mbd)mbd.style.display=connected?'':'none';}
+    // Dot del header
+    const hdot=document.getElementById('cashier-bt-dot');
+    if(hdot)hdot.style.background=connected?'#2ecc71':'#ff6b6b';
   }
   async function connect(){
     if(!navigator.bluetooth){alert('Web Bluetooth no disponible.\nUsa Chrome en Android o Windows 10+.');return false;}
@@ -1005,6 +1030,8 @@ const App=(()=>{
   function loadCfg(){const c=getCfg();$('cfg-name').value=c.name||'';$('cfg-tel').value=c.tel||'';$('cfg-addr').value=c.addr||'';$('cfg-msg').value=c.msg||'';$('cfg-pin').value=c.pin||'';$('cfg-gas').value=c.gas||'';}
   function saveSettings(){const cfg={name:$('cfg-name').value.trim()||'HR BURGER HOUSE',tel:$('cfg-tel').value.trim(),addr:$('cfg-addr').value.trim(),msg:$('cfg-msg').value.trim()||'¡Gracias por su preferencia!',pin:$('cfg-pin').value.trim()||'1234',gas:$('cfg-gas').value.trim()};writeCfg(cfg);toast('✅ Ajustes guardados');}
 
+  function openPrinterModal(){BTPrinter.updateUI();$('modal-printer').classList.add('show');}
+  function closePrinterModal(){$('modal-printer').classList.remove('show');}
   async function btConnect(){const ok=await BTPrinter.connect();if(ok)toast('Impresora conectada');else toast('No se pudo conectar','error');}
   function btDisconnect(){BTPrinter.disconnect();toast('Impresora desconectada');}
   function btTest(){
@@ -1020,7 +1047,7 @@ const App=(()=>{
       {type:'center',text:'¡Listo para imprimir!'},
     ])).then(()=>toast('Prueba enviada'));
   }
-  return{init,saveFirebaseConfig,resetFirebase,loginCajera,confirmCajera,closeModalCajera,logout,showPin,closePin,pinKey,pinDel,pinEnter,setFilterCat,renderProducts,addToCart,changeQty,clearCart,openCheckout,closeCheckout,selPay,calcChange,calcDiscount,applyPromo,setDiscType,completeSale,openMiHistorial,closeMiHistorial,openCorte,closeCorte,printCorte,goTab,saveProduct,editProduct,cancelEdit,deleteProd,toggleProd,renderProdTable,addCat,delCat,renderSales,reprint,clearSales,exportCSV,saveSettings,switchTab,savePromo,deletePromo,renderPromosList,btConnect,btDisconnect,btTest};
+  return{init,saveFirebaseConfig,resetFirebase,loginCajera,confirmCajera,closeModalCajera,logout,showPin,closePin,pinKey,pinDel,pinEnter,setFilterCat,renderProducts,addToCart,changeQty,clearCart,openCheckout,closeCheckout,selPay,calcChange,calcDiscount,applyPromo,setDiscType,completeSale,openMiHistorial,closeMiHistorial,openCorte,closeCorte,printCorte,openPrinterModal,closePrinterModal,goTab,saveProduct,editProduct,cancelEdit,deleteProd,toggleProd,renderProdTable,addCat,delCat,renderSales,reprint,clearSales,exportCSV,saveSettings,switchTab,savePromo,deletePromo,renderPromosList,btConnect,btDisconnect,btTest};
 })();
 document.addEventListener('DOMContentLoaded',()=>App.init());
 </script>

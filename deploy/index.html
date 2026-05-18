@@ -1067,6 +1067,22 @@ function toggleCatEmojiGrid(){const g=document.getElementById('cat-emoji-grid');
 function pickCatEmoji(e){const inp=document.getElementById('cat-emoji');if(inp)inp.value=e;const g=document.getElementById('cat-emoji-grid');if(g)g.classList.remove('open');}
 document.addEventListener('click',function(ev){['emoji-grid','cat-emoji-grid'].forEach(id=>{const g=document.getElementById(id);if(g&&g.classList.contains('open')){const wrap=g.closest('.emoji-picker-wrap');if(wrap&&!wrap.contains(ev.target))g.classList.remove('open');}});});
 </script>
-<script>if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js');</script>
+<script>
+if('serviceWorker' in navigator){
+  let _reloading=false;
+  navigator.serviceWorker.register('/hr-burger-huose/sw.js').then(reg=>{
+    reg.addEventListener('updatefound',()=>{
+      reg.installing.addEventListener('statechange',function(){
+        if(this.state==='activated')window.location.reload();
+      });
+    });
+  });
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{
+    if(_reloading)return;
+    _reloading=true;
+    window.location.reload();
+  });
+}
+</script>
 </body>
 </html>

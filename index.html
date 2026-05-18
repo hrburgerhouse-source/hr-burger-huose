@@ -3,6 +3,19 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script>
+(function(){
+  var V='7';
+  var stored=localStorage.getItem('hrb-v');
+  if(stored&&stored!==V){
+    localStorage.setItem('hrb-v',V);
+    if('caches' in window)caches.keys().then(function(ks){ks.forEach(function(k){caches.delete(k);});});
+    location.reload(true);
+  } else {
+    localStorage.setItem('hrb-v',V);
+  }
+})();
+</script>
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -235,6 +248,10 @@ textarea.form-input{height:130px;resize:vertical;font-family:monospace;font-size
   .products-grid{grid-template-columns:repeat(auto-fill,minmax(105px,1fr))}
   .header-brand{font-size:1rem!important}
   .header-right .btn{padding:6px 10px;font-size:.75rem}
+  .header-right{gap:6px}
+}
+@media(max-width:600px){
+  .btn-lbl{display:none}
 }
 </style>
 </head>
@@ -316,9 +333,10 @@ textarea.form-input{height:130px;resize:vertical;font-family:monospace;font-size
         <div style="font-weight:800;font-size:.95rem">👩‍💼 <span id="cajera-name-display">Cajera</span></div>
         <div style="font-size:.75rem;opacity:.82">Orden <span id="order-num-display">#001</span></div>
       </div>
-      <button class="btn btn-ghost" onclick="App.openMiHistorial()">📜 Historial</button>
-      <button class="btn" style="background:rgba(255,255,255,.15);color:white;border:1.5px solid rgba(255,255,255,.35)" onclick="App.openCorte()">📋 Corte de Caja</button>
-      <button class="btn btn-ghost" onclick="App.logout()">Salir ✕</button>
+      <button class="btn btn-ghost" onclick="App.openMiHistorial()">📜 <span class="btn-lbl">Historial</span></button>
+      <button class="btn btn-ghost" id="cashier-bt-btn" onclick="App.openPrinterModal()" title="Configurar impresora">🖨️<span id="cashier-bt-dot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ff6b6b;vertical-align:middle;margin-left:3px"></span></button>
+      <button class="btn" style="background:rgba(255,255,255,.15);color:white;border:1.5px solid rgba(255,255,255,.35)" onclick="App.openCorte()">📋 <span class="btn-lbl">Corte</span></button>
+      <button class="btn btn-ghost" onclick="App.logout()">✕</button>
     </div>
   </header>
   <div class="mobile-tabs">
@@ -380,6 +398,22 @@ textarea.form-input{height:130px;resize:vertical;font-family:monospace;font-size
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="App.closeCheckout()">Cancelar</button>
       <button class="btn btn-success btn-lg" onclick="App.completeSale()">✅ Completar Venta</button>
+    </div>
+  </div>
+</div>
+<!-- MODAL IMPRESORA -->
+<div id="modal-printer" class="modal-overlay">
+  <div class="modal" style="max-width:340px;text-align:center">
+    <div class="modal-title">🖨️ Impresora Bluetooth</div>
+    <div class="bt-status" style="justify-content:center;margin-bottom:18px">
+      <div class="bt-dot" id="modal-bt-dot"></div>
+      <div style="text-align:left"><div class="bt-label" id="modal-bt-label">Sin conexión</div><div class="bt-sublabel" id="modal-bt-sublabel">Rongta RPP02A</div></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <button class="btn btn-primary" id="modal-bt-connect" onclick="App.btConnect()">🔵 Conectar Impresora</button>
+      <button class="btn btn-outline" id="modal-bt-disconnect" style="display:none" onclick="App.btDisconnect()">Desconectar</button>
+      <button class="btn btn-outline" onclick="App.btTest()">🖨️ Imprimir Prueba</button>
+      <button class="btn btn-ghost" style="color:#aaa" onclick="App.closePrinterModal()">Cerrar</button>
     </div>
   </div>
 </div>
@@ -541,6 +575,11 @@ textarea.form-input{height:130px;resize:vertical;font-family:monospace;font-size
         <button class="btn btn-primary" onclick="App.saveSettings()">💾 Guardar Ajustes</button>
       </div>
       <div class="form-card" style="margin-top:16px">
+        <div class="form-card-title">🔄 Actualización</div>
+        <div style="font-size:.85rem;color:#666;margin-bottom:12px">Si el sistema no muestra los últimos cambios, presiona este botón.</div>
+        <button class="btn btn-outline" onclick="App.forceUpdate()">🔄 Actualizar App Ahora</button>
+      </div>
+      <div class="form-card" style="margin-top:16px">
         <div class="form-card-title">🖨️ Impresora Bluetooth</div>
         <div class="bt-status">
           <div class="bt-dot" id="bt-dot"></div>
@@ -580,10 +619,18 @@ const BTPrinter=(function(){
   ];
   function isConnected(){return!!_char;}
   function _ui(){
+    const connected=isConnected();
+    const name=connected?(_dev?.name||'Impresora'):'Sin conexión';
+    const sub2=connected?'Lista para imprimir':'Rongta RPP02A';
+    // Ajustes (admin)
     const dot=document.getElementById('bt-dot'),lbl=document.getElementById('bt-label'),sub=document.getElementById('bt-sublabel'),bc=document.getElementById('bt-connect-btn'),bd=document.getElementById('bt-disconnect-btn');
-    if(!dot)return;
-    if(isConnected()){dot.className='bt-dot connected';lbl.textContent='Conectada: '+(_dev?.name||'Impresora');sub.textContent='Lista para imprimir';if(bc)bc.style.display='none';if(bd)bd.style.display='';}
-    else{dot.className='bt-dot';lbl.textContent='Sin conexión';sub.textContent='Rongta RPP02A';if(bc)bc.style.display='';if(bd)bd.style.display='none';}
+    if(dot){dot.className='bt-dot'+(connected?' connected':'');lbl.textContent=connected?'Conectada: '+name:'Sin conexión';sub.textContent=sub2;if(bc)bc.style.display=connected?'none':'';if(bd)bd.style.display=connected?'':'none';}
+    // Modal cajera
+    const mdot=document.getElementById('modal-bt-dot'),mlbl=document.getElementById('modal-bt-label'),msub=document.getElementById('modal-bt-sublabel'),mbc=document.getElementById('modal-bt-connect'),mbd=document.getElementById('modal-bt-disconnect');
+    if(mdot){mdot.className='bt-dot'+(connected?' connected':'');mlbl.textContent=connected?'Conectada: '+name:'Sin conexión';msub.textContent=sub2;if(mbc)mbc.style.display=connected?'none':'';if(mbd)mbd.style.display=connected?'':'none';}
+    // Dot del header
+    const hdot=document.getElementById('cashier-bt-dot');
+    if(hdot)hdot.style.background=connected?'#2ecc71':'#ff6b6b';
   }
   async function connect(){
     if(!navigator.bluetooth){alert('Web Bluetooth no disponible.\nUsa Chrome en Android o Windows 10+.');return false;}
@@ -904,17 +951,23 @@ const App=(()=>{
       lines.push({type:'row',left:'Cajera: '+sale.cajera,right:d.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})});
       lines.push({type:'hr'});
       (sale.items||[]).forEach(i=>{
-        lines.push({type:'row',left:i.qty+'x '+i.name,right:i.price===0?'GRATIS':fmt(i.price*i.qty)});
+        lines.push({type:'text',text:i.qty+'x '+i.name});
+        lines.push({type:'row',left:'',right:i.price===0?'GRATIS':fmt(i.price*i.qty)});
       });
       lines.push({type:'hr'});
       if(sale.discount>0){
-        lines.push({type:'row',left:'Subtotal',right:fmt(sale.subtotal)});
-        lines.push({type:'row',left:'Descuento',right:'-'+fmt(sale.discount)});
+        lines.push({type:'text',text:'Subtotal'});
+        lines.push({type:'row',left:'',right:fmt(sale.subtotal)});
+        lines.push({type:'text',text:'Descuento'});
+        lines.push({type:'row',left:'',right:'-'+fmt(sale.discount)});
       }
-      lines.push({type:'row',bold:true,big:true,left:'TOTAL',right:fmt(sale.total)});
+      lines.push({type:'text',text:'TOTAL'});
+      lines.push({type:'row',left:'',right:fmt(sale.total)});
       if(sale.pay==='cash'){
-        lines.push({type:'row',left:'Recibido',right:fmt(sale.received)});
-        lines.push({type:'row',left:'Cambio',right:fmt(change)});
+        lines.push({type:'text',text:'Recibido'});
+        lines.push({type:'row',left:'',right:fmt(sale.received)});
+        lines.push({type:'text',text:'Cambio'});
+        lines.push({type:'row',left:'',right:fmt(change)});
       }
       lines.push({type:'hr'});
       lines.push({type:'center',text:cfg.msg||'¡Gracias por su preferencia!'});
@@ -999,6 +1052,13 @@ const App=(()=>{
   function loadCfg(){const c=getCfg();$('cfg-name').value=c.name||'';$('cfg-tel').value=c.tel||'';$('cfg-addr').value=c.addr||'';$('cfg-msg').value=c.msg||'';$('cfg-pin').value=c.pin||'';$('cfg-gas').value=c.gas||'';}
   function saveSettings(){const cfg={name:$('cfg-name').value.trim()||'HR BURGER HOUSE',tel:$('cfg-tel').value.trim(),addr:$('cfg-addr').value.trim(),msg:$('cfg-msg').value.trim()||'¡Gracias por su preferencia!',pin:$('cfg-pin').value.trim()||'1234',gas:$('cfg-gas').value.trim()};writeCfg(cfg);toast('✅ Ajustes guardados');}
 
+  function forceUpdate(){
+    if('caches' in window)caches.keys().then(ks=>Promise.all(ks.map(k=>caches.delete(k))));
+    if('serviceWorker' in navigator)navigator.serviceWorker.getRegistrations().then(regs=>regs.forEach(r=>r.unregister()));
+    window.location.reload(true);
+  }
+  function openPrinterModal(){BTPrinter.updateUI();$('modal-printer').classList.add('show');}
+  function closePrinterModal(){$('modal-printer').classList.remove('show');}
   async function btConnect(){const ok=await BTPrinter.connect();if(ok)toast('Impresora conectada');else toast('No se pudo conectar','error');}
   function btDisconnect(){BTPrinter.disconnect();toast('Impresora desconectada');}
   function btTest(){
@@ -1014,7 +1074,7 @@ const App=(()=>{
       {type:'center',text:'¡Listo para imprimir!'},
     ])).then(()=>toast('Prueba enviada'));
   }
-  return{init,saveFirebaseConfig,resetFirebase,loginCajera,confirmCajera,closeModalCajera,logout,showPin,closePin,pinKey,pinDel,pinEnter,setFilterCat,renderProducts,addToCart,changeQty,clearCart,openCheckout,closeCheckout,selPay,calcChange,calcDiscount,applyPromo,setDiscType,completeSale,openMiHistorial,closeMiHistorial,openCorte,closeCorte,printCorte,goTab,saveProduct,editProduct,cancelEdit,deleteProd,toggleProd,renderProdTable,addCat,delCat,renderSales,reprint,clearSales,exportCSV,saveSettings,switchTab,savePromo,deletePromo,renderPromosList,btConnect,btDisconnect,btTest};
+  return{init,saveFirebaseConfig,resetFirebase,loginCajera,confirmCajera,closeModalCajera,logout,showPin,closePin,pinKey,pinDel,pinEnter,setFilterCat,renderProducts,addToCart,changeQty,clearCart,openCheckout,closeCheckout,selPay,calcChange,calcDiscount,applyPromo,setDiscType,completeSale,openMiHistorial,closeMiHistorial,openCorte,closeCorte,printCorte,openPrinterModal,closePrinterModal,forceUpdate,goTab,saveProduct,editProduct,cancelEdit,deleteProd,toggleProd,renderProdTable,addCat,delCat,renderSales,reprint,clearSales,exportCSV,saveSettings,switchTab,savePromo,deletePromo,renderPromosList,btConnect,btDisconnect,btTest};
 })();
 document.addEventListener('DOMContentLoaded',()=>App.init());
 </script>
@@ -1034,6 +1094,22 @@ function toggleCatEmojiGrid(){const g=document.getElementById('cat-emoji-grid');
 function pickCatEmoji(e){const inp=document.getElementById('cat-emoji');if(inp)inp.value=e;const g=document.getElementById('cat-emoji-grid');if(g)g.classList.remove('open');}
 document.addEventListener('click',function(ev){['emoji-grid','cat-emoji-grid'].forEach(id=>{const g=document.getElementById(id);if(g&&g.classList.contains('open')){const wrap=g.closest('.emoji-picker-wrap');if(wrap&&!wrap.contains(ev.target))g.classList.remove('open');}});});
 </script>
-<script>if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js');</script>
+<script>
+if('serviceWorker' in navigator){
+  let _reloading=false;
+  navigator.serviceWorker.register('/hr-burger-huose/sw.js').then(reg=>{
+    reg.addEventListener('updatefound',()=>{
+      reg.installing.addEventListener('statechange',function(){
+        if(this.state==='activated')window.location.reload();
+      });
+    });
+  });
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{
+    if(_reloading)return;
+    _reloading=true;
+    window.location.reload();
+  });
+}
+</script>
 </body>
 </html>

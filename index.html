@@ -192,9 +192,9 @@ textarea.form-input{height:130px;resize:vertical;font-family:monospace;font-size
 .corte-info-item{background:var(--light);border-radius:11px;padding:12px 16px}
 .corte-info-label{font-size:.72rem;font-weight:800;color:#aaa;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px}
 .corte-info-val{font-weight:800;color:var(--dark);font-size:.95rem}
-.corte-pay-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px}
+.corte-pay-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:20px}
 .corte-pay-card{border-radius:11px;padding:14px 12px;text-align:center}
-.corte-pay-card.cash{background:#d1fae5}.corte-pay-card.card{background:#dbeafe}.corte-pay-card.transfer{background:#ede9fe}
+.corte-pay-card.cash{background:#d1fae5}.corte-pay-card.card{background:#dbeafe}.corte-pay-card.transfer{background:#ede9fe}.corte-pay-card.personal{background:#fef9c3}
 .corte-pay-icon{font-size:1.6rem;margin-bottom:5px}.corte-pay-method{font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.3px;color:#555;margin-bottom:3px}
 .corte-pay-amount{font-size:1.1rem;font-weight:900;color:var(--dark)}.corte-pay-count{font-size:.72rem;color:#888;margin-top:2px}
 .corte-sales-list{border:2px solid #f0f0f0;border-radius:11px;overflow:hidden;margin-bottom:20px;max-height:220px;overflow-y:auto}
@@ -389,6 +389,7 @@ textarea.form-input{height:130px;resize:vertical;font-family:monospace;font-size
         <button class="pay-btn selected" id="pay-cash" onclick="App.selPay('cash')"><span class="pay-icon">💵</span>Efectivo</button>
         <button class="pay-btn" id="pay-card" onclick="App.selPay('card')"><span class="pay-icon">💳</span>Tarjeta</button>
         <button class="pay-btn" id="pay-transfer" onclick="App.selPay('transfer')"><span class="pay-icon">📲</span>Transferencia</button>
+        <button class="pay-btn" id="pay-personal" onclick="App.selPay('personal')"><span class="pay-icon">👨‍🍳</span>Personal</button>
       </div>
     </div>
     <div class="form-group" id="cash-group"><label class="form-label">Efectivo Recibido ($)</label>
@@ -456,6 +457,7 @@ textarea.form-input{height:130px;resize:vertical;font-family:monospace;font-size
       <div class="corte-pay-card cash"><div class="corte-pay-icon">💵</div><div class="corte-pay-method">Efectivo</div><div class="corte-pay-amount" id="corte-cash">$0.00</div><div class="corte-pay-count" id="corte-cash-c">0 ventas</div></div>
       <div class="corte-pay-card card"><div class="corte-pay-icon">💳</div><div class="corte-pay-method">Tarjeta</div><div class="corte-pay-amount" id="corte-card">$0.00</div><div class="corte-pay-count" id="corte-card-c">0 ventas</div></div>
       <div class="corte-pay-card transfer"><div class="corte-pay-icon">📲</div><div class="corte-pay-method">Transfer.</div><div class="corte-pay-amount" id="corte-transfer">$0.00</div><div class="corte-pay-count" id="corte-transfer-c">0 ventas</div></div>
+      <div class="corte-pay-card personal"><div class="corte-pay-icon">👨‍🍳</div><div class="corte-pay-method">Personal</div><div class="corte-pay-amount" id="corte-personal">$0.00</div><div class="corte-pay-count" id="corte-personal-c">0 consumos</div></div>
     </div>
     <div class="corte-grand-total"><span class="corte-grand-label">💰 TOTAL DEL DÍA</span><span class="corte-grand-amount" id="corte-total">$0.00</span></div>
     <div class="corte-sales-list" id="corte-sales-list"></div>
@@ -702,7 +704,7 @@ function _escpos(lines){
 const App=(()=>{
   let cart=[],payMethod='cash',pinBuf='',filterCat='all',clockTimer=null,cajeraName='',db=null;
   const cache={products:[],categories:[],settings:{},orderNumber:1};
-  const DEF_CATS=[{id:'burgers',name:'Hamburguesas',emoji:'🍔'},{id:'drinks',name:'Bebidas',emoji:'🥤'},{id:'sides',name:'Acompañantes',emoji:'🍟'},{id:'otros',name:'Otros',emoji:'🍽️'}];
+  const DEF_CATS=[{id:'burgers',name:'Hamburguesas',emoji:'🍔'},{id:'drinks',name:'Bebidas',emoji:'🥤'},{id:'sides',name:'Acompañantes',emoji:'🍟'},{id:'otros',name:'Otros',emoji:'🍽️'},{id:'personal',name:'Personal',emoji:'👨‍🍳'}];
   const DEF_CFG={name:'HR BURGER HOUSE',tel:'',addr:'',msg:'¡Gracias por su preferencia!',pin:'1234'};
   const GAS_URL=()=>getCfg().gas||'';
   const $=id=>document.getElementById(id);
@@ -741,6 +743,7 @@ const App=(()=>{
       const upd={};
       if(!ex.settings)upd.settings=DEF_CFG;
       if(!ex.orderNumber)upd.orderNumber=1;
+      if(!ex.categories||!ex.categories.personal)upd['categories/personal']={id:'personal',name:'Personal',emoji:'👨‍🍳'};
       if(Object.keys(upd).length)await db.ref('/').update(upd);
     }
     const fresh=(await db.ref('/').once('value')).val();
@@ -862,7 +865,7 @@ const App=(()=>{
   function applyPromo(){const sel=document.getElementById('disc-promo-sel');const id=sel?sel.value:'';if(!id){discountVal=0;document.getElementById('disc-val').value='';updateCheckoutTotal();return;}const p=getPromos().find(x=>x.id===id);if(!p)return;setDiscType(p.type);document.getElementById('disc-val').value=p.value;discountVal=p.value;updateCheckoutTotal();}
   function fillPromoSelect(){const sel=document.getElementById('disc-promo-sel');if(!sel)return;sel.innerHTML='<option value="">Sin descuento</option>'+getPromos().map(p=>'<option value="'+p.id+'">'+p.name+' ('+(p.type==='pct'?p.value+'%':'$'+p.value)+')</option>').join('');}
   function closeCheckout(){$('modal-checkout').classList.remove('show');}
-  function selPay(m){payMethod=m;['cash','card','transfer'].forEach(x=>$('pay-'+x).classList.toggle('selected',x===m));$('cash-group').style.display=m==='cash'?'block':'none';if(m!=='cash')$('change-box').className='change-box';}
+  function selPay(m){payMethod=m;['cash','card','transfer','personal'].forEach(x=>{const b=$('pay-'+x);if(b)b.classList.toggle('selected',x===m);});$('cash-group').style.display=m==='cash'?'block':'none';if(m!=='cash')$('change-box').className='change-box';}
   function calcChange(){const total=cartTotalFinal(),rec=parseFloat($('cash-received').value)||0,cb=$('change-box');if(!rec){cb.className='change-box';return;}const diff=rec-total;cb.className='change-box show '+(diff>=0?'ok':'short');$('change-label').textContent=diff>=0?'Cambio a entregar':'Falta por cobrar';$('change-label').className='change-label'+(diff<0?' short':'');$('change-amount').textContent=fmt(Math.abs(diff));$('change-amount').className='change-amount'+(diff<0?' short':'');}
 
   async function completeSale(){
@@ -886,7 +889,7 @@ const App=(()=>{
     const total=sales.reduce((s,x)=>s+x.total,0);
     $('hist-count').textContent=sales.length;
     $('hist-total').textContent=fmt(total);
-    const payLabel={cash:'💵 Efectivo',card:'💳 Tarjeta',transfer:'📲 Transfer.'};
+    const payLabel={cash:'💵 Efectivo',card:'💳 Tarjeta',transfer:'📲 Transfer.',personal:'👨‍🍳 Personal'};
     const tbody=$('historial-tbody');
     if(!sales.length){tbody.innerHTML='<tr><td colspan="6" class="empty-table">Sin ventas en este turno</td></tr>';return;}
     tbody.innerHTML=sales.map(s=>`<tr>
@@ -907,16 +910,20 @@ const App=(()=>{
     const today=new Date().toISOString().slice(0,10);
     const sales=await getSales(today);
     const total=sales.reduce((s,x)=>s+x.total,0);
-    const byPay={cash:0,card:0,transfer:0},countPay={cash:0,card:0,transfer:0};
+    const byPay={cash:0,card:0,transfer:0,personal:0},countPay={cash:0,card:0,transfer:0,personal:0};
     sales.forEach(s=>{byPay[s.pay]=(byPay[s.pay]||0)+s.total;countPay[s.pay]=(countPay[s.pay]||0)+1;});
+    const salesCobradas=sales.filter(s=>s.pay!=='personal');
+    const totalCobrado=salesCobradas.reduce((s,x)=>s+x.total,0);
     if($('corte-count'))$('corte-count').textContent=sales.length;
-    if($('corte-avg'))$('corte-avg').textContent=fmt(sales.length?total/sales.length:0);
-    if($('corte-total'))$('corte-total').textContent=fmt(total);
+    if($('corte-avg'))$('corte-avg').textContent=fmt(salesCobradas.length?totalCobrado/salesCobradas.length:0);
+    if($('corte-total'))$('corte-total').textContent=fmt(totalCobrado);
     if($('corte-cash'))$('corte-cash').textContent=fmt(byPay.cash);if($('corte-cash-c'))$('corte-cash-c').textContent=countPay.cash+' ventas';
     if($('corte-card'))$('corte-card').textContent=fmt(byPay.card);if($('corte-card-c'))$('corte-card-c').textContent=countPay.card+' ventas';
     if($('corte-transfer'))$('corte-transfer').textContent=fmt(byPay.transfer);if($('corte-transfer-c'))$('corte-transfer-c').textContent=countPay.transfer+' ventas';
+    if($('corte-personal'))$('corte-personal').textContent=countPay.personal+' ord.';if($('corte-personal-c'))$('corte-personal-c').textContent=countPay.personal+' consumos';
     const sl=$('corte-sales-list');
-    if(sl)sl.innerHTML=sales.length?sales.map(s=>`<div class="corte-sale-row"><span class="corte-sale-num">#${String(s.orderN).padStart(3,'0')}</span><span class="corte-sale-time">${new Date(s.date).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})}</span><span class="corte-sale-pay">${s.pay==='cash'?'💵':s.pay==='card'?'💳':'📲'}</span><span class="corte-sale-total">${fmt(s.total)}</span></div>`).join(''):'<div class="empty-table">Sin ventas hoy</div>';
+    const payIcon={cash:'💵',card:'💳',transfer:'📲',personal:'👨‍🍳'};
+    if(sl)sl.innerHTML=sales.length?sales.map(s=>`<div class="corte-sale-row"><span class="corte-sale-num">#${String(s.orderN).padStart(3,'0')}</span><span class="corte-sale-time">${new Date(s.date).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})}</span><span class="corte-sale-pay">${payIcon[s.pay]||'💵'}</span><span class="corte-sale-total">${s.pay==='personal'?'—':fmt(s.total)}</span></div>`).join(''):'<div class="empty-table">Sin ventas hoy</div>';
   }
   function closeCorte(){$('modal-corte').classList.remove('show');}
   async function printCorte(){
@@ -925,8 +932,10 @@ const App=(()=>{
     const today=new Date().toISOString().slice(0,10);
     const sales=await getSales(today);
     const total=sales.reduce((s,x)=>s+x.total,0);
-    const byPay={cash:0,card:0,transfer:0},countPay={cash:0,card:0,transfer:0};
+    const byPay={cash:0,card:0,transfer:0,personal:0},countPay={cash:0,card:0,transfer:0,personal:0};
     sales.forEach(s=>{byPay[s.pay]=(byPay[s.pay]||0)+s.total;countPay[s.pay]=(countPay[s.pay]||0)+1;});
+    const cobradas=sales.filter(s=>s.pay!=='personal');
+    const totalCobrado=cobradas.reduce((s,x)=>s+x.total,0);
     const lines=[
       {type:'center',bold:true,text:cfg.name||'HR BURGER HOUSE'},
       {type:'center',text:'-- CORTE DE CAJA --'},
@@ -936,9 +945,10 @@ const App=(()=>{
       {type:'row',left:'Efectivo ('+countPay.cash+')',right:fmt(byPay.cash)},
       {type:'row',left:'Tarjeta ('+countPay.card+')',right:fmt(byPay.card)},
       {type:'row',left:'Transferencia ('+countPay.transfer+')',right:fmt(byPay.transfer)},
+      {type:'row',left:'Personal ('+countPay.personal+')',right:countPay.personal+' consumos'},
       {type:'hr'},
-      {type:'row',bold:true,left:'TOTAL ('+sales.length+' ventas)',right:fmt(total)},
-      {type:'row',left:'Promedio por venta',right:fmt(sales.length?total/sales.length:0)},
+      {type:'row',bold:true,left:'TOTAL ('+cobradas.length+' ventas)',right:fmt(totalCobrado)},
+      {type:'row',left:'Promedio por venta',right:fmt(cobradas.length?totalCobrado/cobradas.length:0)},
       {type:'hr'},
       {type:'center',text:new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})},
     ];

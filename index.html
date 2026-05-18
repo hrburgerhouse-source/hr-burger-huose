@@ -568,7 +568,10 @@ textarea.form-input{height:130px;resize:vertical;font-family:monospace;font-size
         <button class="btn btn-sm btn-primary" onclick="App.sendStockAlert()">📧 Enviar alerta por correo</button>
       </div>
       <div class="form-card">
-        <div class="form-card-title">📦 Stock actual</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <div class="form-card-title" style="margin-bottom:0">📦 Stock actual</div>
+          <button class="btn btn-outline btn-sm" onclick="App.reloadInventory()" title="Recargar inventario">🔄 Recargar</button>
+        </div>
         <div id="inv-list" class="inv-grid"><span style="color:#ccc;font-size:.88rem">Cargando inventario...</span></div>
       </div>
       <div class="form-card" style="margin-top:16px">
@@ -1177,6 +1180,13 @@ const App=(()=>{
       });
     }
     grid.classList.add('open');
+  }
+  async function reloadInventory(){
+    if(!db)return;
+    const snap=await db.ref('inventory').once('value');
+    cache.inventory=snap.val()?Object.values(snap.val()):[];
+    renderInventory();
+    toast('Inventario actualizado');
   }
   function startInvEdit(id){$('inv-name-'+id).style.display='none';const ed=$('inv-edit-'+id);ed.style.display='flex';}
   function cancelInvEdit(id){$('inv-name-'+id).style.display='';$('inv-edit-'+id).style.display='none';}

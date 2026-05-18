@@ -674,7 +674,13 @@ function _escpos(lines){
       parts.push(enc.encode('--------------------------------\n'));
     } else if(l.type==='row'){
       const lt=String(l.left||''),rt=String(l.right||'');
-      if(lt.length+rt.length+1<=W){
+      if(lt===''){
+        // precio solo → doble ancho + doble alto para máxima legibilidad
+        parts.push(new Uint8Array([0x1D,0x21,0x11]));
+        const sp=Math.max(1,16-rt.length);
+        parts.push(enc.encode(' '.repeat(sp)+rt+'\n'));
+        parts.push(new Uint8Array([0x1D,0x21,0x01]));
+      } else if(lt.length+rt.length+1<=W){
         const sp=Math.max(1,W-lt.length-rt.length);
         parts.push(enc.encode(lt+' '.repeat(sp)+rt+'\n'));
       } else {

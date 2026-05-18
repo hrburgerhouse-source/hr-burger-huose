@@ -1148,6 +1148,7 @@ const App=(()=>{
             <option value="cajas" ${item.unit==='cajas'?'selected':''}>cajas</option>
             <option value="unidades" ${item.unit==='unidades'?'selected':''}>unidades</option>
           </select>
+          <input id="inv-edit-qty-${item.id}" class="form-input" style="width:70px;padding:5px 8px;font-size:.85rem" type="number" value="${item.qty}" min="0" step=".5" placeholder="Cant.">
           <input id="inv-edit-min-${item.id}" class="form-input" style="width:70px;padding:5px 8px;font-size:.85rem" type="number" value="${item.minQty}" min="0" step=".5" placeholder="Mín">
           <button class="btn btn-sm btn-success" onclick="App.saveInvEdit('${item.id}')">✓</button>
           <button class="btn btn-sm btn-outline" onclick="App.cancelInvEdit('${item.id}')">✕</button>
@@ -1182,10 +1183,11 @@ const App=(()=>{
   function saveInvEdit(id){
     const name=($('inv-edit-name-'+id).value||'').trim();
     const unit=$('inv-edit-unit-'+id).value;
+    const qty=Math.max(0,parseFloat($('inv-edit-qty-'+id).value)||0);
     const minQty=parseFloat($('inv-edit-min-'+id).value)||0;
     if(!name){toast('El nombre no puede estar vacío','error');return;}
     const items=getInventory(),it=items.find(x=>x.id===id);
-    if(it){it.name=name;it.unit=unit;it.minQty=minQty;writeInventory(items);}
+    if(it){it.name=name;it.unit=unit;it.qty=qty;it.minQty=minQty;writeInventory(items);}
     toast('✅ Artículo actualizado');
   }
   function adjustStock(id,delta){const items=getInventory(),it=items.find(x=>x.id===id);if(!it)return;it.qty=Math.max(0,parseFloat((it.qty+delta).toFixed(2)));writeInventory(items);}

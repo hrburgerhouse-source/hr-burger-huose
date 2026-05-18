@@ -609,7 +609,10 @@ textarea.form-input{height:130px;resize:vertical;font-family:monospace;font-size
       <div class="form-card" style="margin-top:16px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
           <div class="form-card-title" style="margin-bottom:0">📋 Historial de cambios</div>
-          <button class="btn btn-outline btn-sm" onclick="App.loadInvLog()">🔄 Recargar</button>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-outline btn-sm" onclick="App.loadInvLog()">🔄 Recargar</button>
+            <button class="btn btn-danger btn-sm" onclick="App.clearInvLog()">🗑️ Limpiar</button>
+          </div>
         </div>
         <div id="inv-log-list" class="inv-log-list"><span style="color:#ccc;font-size:.85rem">Sin cambios registrados.</span></div>
       </div>
@@ -1221,6 +1224,12 @@ const App=(()=>{
     toast('✅ Artículo actualizado');
   }
   function logInv(entry){if(db)db.ref('inventoryLog').push({...entry,date:new Date().toISOString(),user:cajeraName||'Admin'});}
+  async function clearInvLog(){
+    if(!await showConfirm('¿Eliminar todo el historial de inventario?'))return;
+    if(db)await db.ref('inventoryLog').remove();
+    const el=$('inv-log-list');if(el)el.innerHTML='<span style="color:#ccc;font-size:.85rem">Sin cambios registrados.</span>';
+    toast('Historial eliminado','error');
+  }
   async function loadInvLog(){
     const el=$('inv-log-list');if(!el)return;
     if(!db){el.innerHTML='<span style="color:#ccc;font-size:.85rem">Sin conexión.</span>';return;}

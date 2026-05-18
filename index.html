@@ -574,6 +574,13 @@ textarea.form-input{height:130px;resize:vertical;font-family:monospace;font-size
       <div class="form-card" style="margin-top:16px">
         <div class="form-card-title">➕ Agregar artículo</div>
         <div class="form-row form-gap">
+          <div class="form-group"><label class="form-label">Emoji</label>
+            <div class="emoji-picker-wrap">
+              <input type="text" class="form-input" id="inv-f-emoji" placeholder="📦" maxlength="4" style="font-size:1.4rem;text-align:center;padding-right:36px;width:70px" onclick="toggleInvEmojiGrid()">
+              <button type="button" class="emoji-picker-btn" onclick="toggleInvEmojiGrid()">▼</button>
+              <div class="emoji-grid" id="inv-emoji-grid"></div>
+            </div>
+          </div>
           <div class="form-group" style="flex:2"><label class="form-label">Nombre</label><input type="text" class="form-input" id="inv-f-name" placeholder="Ej: Carne de Res"></div>
           <div class="form-group"><label class="form-label">Unidad</label>
             <select class="form-select" id="inv-f-unit">
@@ -1143,13 +1150,13 @@ const App=(()=>{
   function adjustStock(id,delta){const items=getInventory(),it=items.find(x=>x.id===id);if(!it)return;it.qty=Math.max(0,parseFloat((it.qty+delta).toFixed(2)));writeInventory(items);}
   function saveInvQty(id,val){const items=getInventory(),it=items.find(x=>x.id===id);if(!it)return;it.qty=Math.max(0,parseFloat(val)||0);writeInventory(items);}
   function addInvItem(){
-    const name=$('inv-f-name').value.trim(),unit=$('inv-f-unit').value,qty=parseFloat($('inv-f-qty').value)||0,minQty=parseFloat($('inv-f-min').value)||0;
+    const name=$('inv-f-name').value.trim(),emoji=$('inv-f-emoji').value.trim()||'📦',unit=$('inv-f-unit').value,qty=parseFloat($('inv-f-qty').value)||0,minQty=parseFloat($('inv-f-min').value)||0;
     if(!name){toast('Escribe el nombre del artículo','error');return;}
     const items=getInventory();
     const id=name.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'')+'-'+Date.now().toString(36);
-    items.push({id,name,emoji:'📦',unit,qty,minQty});
+    items.push({id,name,emoji,unit,qty,minQty});
     writeInventory(items);
-    $('inv-f-name').value='';$('inv-f-qty').value='';$('inv-f-min').value='';
+    $('inv-f-name').value='';$('inv-f-emoji').value='';$('inv-f-qty').value='';$('inv-f-min').value='';
     toast('✅ Artículo agregado');
   }
   async function deleteInvItem(id){if(!await showConfirm('¿Eliminar este artículo del inventario?'))return;writeInventory(getInventory().filter(i=>i.id!==id));toast('Eliminado','error');}
@@ -1225,14 +1232,17 @@ document.addEventListener('DOMContentLoaded',()=>{
   if(grid)[...FOOD_EMOJIS].forEach(e=>{const b=document.createElement('button');b.type='button';b.className='emoji-opt';b.textContent=e;b.onclick=()=>{document.getElementById('f-emoji').value=e;grid.classList.remove('open');};grid.appendChild(b);});
   const cgrid=document.getElementById('cat-emoji-grid');
   if(cgrid)[...FOOD_EMOJIS].forEach(e=>{const b=document.createElement('button');b.type='button';b.className='emoji-opt';b.textContent=e;b.onclick=()=>pickCatEmoji(e);cgrid.appendChild(b);});
+  const igrid=document.getElementById('inv-emoji-grid');
+  if(igrid)[...FOOD_EMOJIS].forEach(e=>{const b=document.createElement('button');b.type='button';b.className='emoji-opt';b.textContent=e;b.onclick=()=>{document.getElementById('inv-f-emoji').value=e;igrid.classList.remove('open');};igrid.appendChild(b);});
 });
 let _confirmResolve=null;
 function showConfirm(msg){return new Promise(res=>{_confirmResolve=res;document.getElementById('confirm-msg').textContent=msg||'¿Estás seguro?';document.getElementById('modal-confirm').classList.add('show');});}
 function confirmResolve(val){document.getElementById('modal-confirm').classList.remove('show');if(_confirmResolve){_confirmResolve(val);_confirmResolve=null;}}
 function toggleEmojiGrid(){const g=document.getElementById('emoji-grid');if(g)g.classList.toggle('open');}
 function toggleCatEmojiGrid(){const g=document.getElementById('cat-emoji-grid');if(g)g.classList.toggle('open');}
+function toggleInvEmojiGrid(){const g=document.getElementById('inv-emoji-grid');if(g)g.classList.toggle('open');}
 function pickCatEmoji(e){const inp=document.getElementById('cat-emoji');if(inp)inp.value=e;const g=document.getElementById('cat-emoji-grid');if(g)g.classList.remove('open');}
-document.addEventListener('click',function(ev){['emoji-grid','cat-emoji-grid'].forEach(id=>{const g=document.getElementById(id);if(g&&g.classList.contains('open')){const wrap=g.closest('.emoji-picker-wrap');if(wrap&&!wrap.contains(ev.target))g.classList.remove('open');}});});
+document.addEventListener('click',function(ev){['emoji-grid','cat-emoji-grid','inv-emoji-grid'].forEach(id=>{const g=document.getElementById(id);if(g&&g.classList.contains('open')){const wrap=g.closest('.emoji-picker-wrap');if(wrap&&!wrap.contains(ev.target))g.classList.remove('open');}});});
 </script>
 <script>
 if('serviceWorker' in navigator){

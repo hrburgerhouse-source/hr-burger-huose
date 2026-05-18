@@ -1103,7 +1103,7 @@ document.addEventListener('click',function(ev){['emoji-grid','cat-emoji-grid'].f
 <script>
 if('serviceWorker' in navigator){
   let _reloading=false;
-  navigator.serviceWorker.register('/hr-burger-huose/sw.js').then(reg=>{
+  navigator.serviceWorker.register('/hr-burger-huose/sw.js',{updateViaCache:'none'}).then(reg=>{
     reg.addEventListener('updatefound',()=>{
       reg.installing.addEventListener('statechange',function(){
         if(this.state==='activated')window.location.reload();

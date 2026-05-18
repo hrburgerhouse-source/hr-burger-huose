@@ -665,7 +665,7 @@ function _escpos(lines){
   parts.push(new Uint8Array([0x1B,0x40]));       // ESC @ init
   parts.push(new Uint8Array([0x1B,0x4D,0x00]));  // Font A
   parts.push(new Uint8Array([0x1D,0x21,0x01]));  // doble alto, ancho normal
-  parts.push(new Uint8Array([0x1B,0x32]));        // espaciado por defecto
+  parts.push(new Uint8Array([0x1B,0x33,0x38]));  // ESC 3 56 - espaciado para doble alto
   for(const l of lines){
     const center=l.type==='center';
     parts.push(new Uint8Array([0x1B,0x61,center?0x01:0x00]));
@@ -675,10 +675,11 @@ function _escpos(lines){
     } else if(l.type==='row'){
       const lt=String(l.left||''),rt=String(l.right||'');
       if(lt===''){
-        // precio solo → doble ancho + doble alto para máxima legibilidad
+        // precio solo → doble ancho + doble alto, centrado
         parts.push(new Uint8Array([0x1D,0x21,0x11]));
-        const sp=Math.max(1,16-rt.length);
-        parts.push(enc.encode(' '.repeat(sp)+rt+'\n'));
+        parts.push(new Uint8Array([0x1B,0x61,0x01]));  // centrar precio
+        parts.push(enc.encode(rt+'\n'));
+        parts.push(new Uint8Array([0x1B,0x61,0x00]));
         parts.push(new Uint8Array([0x1D,0x21,0x01]));
       } else if(lt.length+rt.length+1<=W){
         const sp=Math.max(1,W-lt.length-rt.length);

@@ -1134,7 +1134,10 @@ const App=(()=>{
       const badge={ok:'🟢 OK',low:'🟡 Stock bajo',out:'🔴 Agotado'}[st];
       const badgeCls={ok:'ok',low:'low',out:'out'}[st];
       return`<div class="inv-item inv-${st}">
-        <span style="font-size:1.5rem">${item.emoji||'📦'}</span>
+        <div class="emoji-picker-wrap" style="position:relative">
+          <button type="button" title="Cambiar emoji" onclick="App.openInvEmojiPicker('${item.id}')" style="font-size:1.5rem;background:none;border:none;cursor:pointer;padding:2px;border-radius:6px" onmouseenter="this.style.background='#f0f0f0'" onmouseleave="this.style.background='none'">${item.emoji||'📦'}</button>
+          <div class="emoji-grid" id="inv-ep-${item.id}"></div>
+        </div>
         <div class="inv-name">${item.name}<span class="inv-unit-lbl"> · ${item.unit} · mín ${item.minQty}</span></div>
         <div class="inv-qty-wrap">
           <button class="inv-qty-btn" onclick="App.adjustStock('${item.id}',-1)">−</button>
@@ -1146,6 +1149,19 @@ const App=(()=>{
       </div>`;
     }).join('');
     checkInvAlert();
+  }
+  function openInvEmojiPicker(id){
+    const grid=$('inv-ep-'+id);if(!grid)return;
+    if(grid.classList.contains('open')){grid.classList.remove('open');return;}
+    document.querySelectorAll('.emoji-grid.open').forEach(g=>g.classList.remove('open'));
+    if(!grid.children.length){
+      [...(window._FOOD_EMOJIS||'🍔🍟🌮🌯🥪🍕🥗🍗🍖🌭🥩🍣🍜🍝🍛🥘🍲🥙🧆🧇🥞🍳🥚🧀🥓🥨🥐🍞🧁🍰🎂🍩🍦🍧🥤🧃🥛☕🍺🥂🍷')].forEach(e=>{
+        const b=document.createElement('button');b.type='button';b.className='emoji-opt';b.textContent=e;
+        b.onclick=()=>{const items=getInventory(),it=items.find(x=>x.id===id);if(it){it.emoji=e;writeInventory(items);}grid.classList.remove('open');};
+        grid.appendChild(b);
+      });
+    }
+    grid.classList.add('open');
   }
   function adjustStock(id,delta){const items=getInventory(),it=items.find(x=>x.id===id);if(!it)return;it.qty=Math.max(0,parseFloat((it.qty+delta).toFixed(2)));writeInventory(items);}
   function saveInvQty(id,val){const items=getInventory(),it=items.find(x=>x.id===id);if(!it)return;it.qty=Math.max(0,parseFloat(val)||0);writeInventory(items);}
@@ -1226,7 +1242,7 @@ const App=(()=>{
 document.addEventListener('DOMContentLoaded',()=>App.init());
 </script>
 <script>
-const FOOD_EMOJIS='🍔🍟🌮🌯🥪🍕🥗🍗🍖🌭🥩🍣🍜🍝🍛🥘🍲🥙🧆🧇🥞🍳🥚🧀🥓🥨🥐🍞🧁🍰🎂🍩🍦🍧🥤🧃🥛☕🍺🥂🍷';
+const FOOD_EMOJIS=window._FOOD_EMOJIS='🍔🍟🌮🌯🥪🍕🥗🍗🍖🌭🥩🍣🍜🍝🍛🥘🍲🥙🧆🧇🥞🍳🥚🧀🥓🥨🥐🍞🧁🍰🎂🍩🍦🍧🥤🧃🥛☕🍺🥂🍷';
 document.addEventListener('DOMContentLoaded',()=>{
   const grid=document.getElementById('emoji-grid');
   if(grid)[...FOOD_EMOJIS].forEach(e=>{const b=document.createElement('button');b.type='button';b.className='emoji-opt';b.textContent=e;b.onclick=()=>{document.getElementById('f-emoji').value=e;grid.classList.remove('open');};grid.appendChild(b);});
@@ -1242,7 +1258,7 @@ function toggleEmojiGrid(){const g=document.getElementById('emoji-grid');if(g)g.
 function toggleCatEmojiGrid(){const g=document.getElementById('cat-emoji-grid');if(g)g.classList.toggle('open');}
 function toggleInvEmojiGrid(){const g=document.getElementById('inv-emoji-grid');if(g)g.classList.toggle('open');}
 function pickCatEmoji(e){const inp=document.getElementById('cat-emoji');if(inp)inp.value=e;const g=document.getElementById('cat-emoji-grid');if(g)g.classList.remove('open');}
-document.addEventListener('click',function(ev){['emoji-grid','cat-emoji-grid','inv-emoji-grid'].forEach(id=>{const g=document.getElementById(id);if(g&&g.classList.contains('open')){const wrap=g.closest('.emoji-picker-wrap');if(wrap&&!wrap.contains(ev.target))g.classList.remove('open');}});});
+document.addEventListener('click',function(ev){document.querySelectorAll('.emoji-grid.open').forEach(g=>{const wrap=g.closest('.emoji-picker-wrap');if(wrap&&!wrap.contains(ev.target))g.classList.remove('open');});});
 </script>
 <script>
 if('serviceWorker' in navigator){

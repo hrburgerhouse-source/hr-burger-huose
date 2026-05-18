@@ -217,6 +217,13 @@ textarea.form-input{height:130px;resize:vertical;font-family:monospace;font-size
 .inv-status-badge.ok{background:#d1fae5;color:#065f46}.inv-status-badge.low{background:#fef3c7;color:#92400e}.inv-status-badge.out{background:#fee2e2;color:#991b1b}
 .inv-alert-bar{background:#fef3c7;border:1.5px solid #f59e0b;border-radius:12px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .inv-alert-text{font-weight:700;color:#92400e;font-size:.9rem;flex:1}
+.inv-log-list{display:flex;flex-direction:column;gap:6px;max-height:320px;overflow-y:auto}
+.inv-log-row{display:flex;align-items:center;gap:10px;padding:8px 12px;background:#f9fafb;border-radius:9px;font-size:.82rem}
+.inv-log-time{color:#aaa;white-space:nowrap;flex-shrink:0}
+.inv-log-icon{font-size:1rem;flex-shrink:0}
+.inv-log-desc{flex:1;color:#333}
+.inv-log-delta{font-weight:800;white-space:nowrap;flex-shrink:0}
+.inv-log-delta.pos{color:#27ae60}.inv-log-delta.neg{color:#e74c3c}.inv-log-delta.edit{color:#3b82f6}
 .corte-grand-label{font-size:1rem;font-weight:700}.corte-grand-amount{font-size:1.6rem;font-weight:900}
 .corte-actions{display:flex;gap:10px}.corte-actions .btn{flex:1;justify-content:center}
 .btn-corte-print{background:linear-gradient(135deg,var(--dark) 0%,#34495e 100%);color:white}
@@ -598,6 +605,13 @@ textarea.form-input{height:130px;resize:vertical;font-family:monospace;font-size
           <div class="form-group"><label class="form-label">Mínimo (alerta)</label><input type="number" class="form-input" id="inv-f-min" placeholder="2" min="0" step=".5"></div>
         </div>
         <button class="btn btn-primary" onclick="App.addInvItem()">➕ Agregar artículo</button>
+      </div>
+      <div class="form-card" style="margin-top:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+          <div class="form-card-title" style="margin-bottom:0">📋 Historial de cambios</div>
+          <button class="btn btn-outline btn-sm" onclick="App.loadInvLog()">🔄 Recargar</button>
+        </div>
+        <div id="inv-log-list" class="inv-log-list"><span style="color:#ccc;font-size:.85rem">Sin cambios registrados.</span></div>
       </div>
     </div>
     <!-- SALES TAB -->
@@ -1197,17 +1211,61 @@ const App=(()=>{
     const minQty=parseFloat($('inv-edit-min-'+id).value)||0;
     if(!name){toast('El nombre no puede estar vacío','error');return;}
     const items=getInventory(),it=items.find(x=>x.id===id);
-    if(it){it.name=name;it.unit=unit;it.qty=qty;it.minQty=minQty;writeInventory(items);}
+    if(it){
+      const oldQty=it.qty;
+      it.name=name;it.unit=unit;it.qty=qty;it.minQty=minQty;
+      writeInventory(items);
+      if(qty!==oldQty)logInv({type:'set',itemId:id,name,unit,oldQty,newQty:qty});
+      else logInv({type:'edit',itemId:id,name,unit,oldQty:qty,newQty:qty});
+    }
     toast('✅ Artículo actualizado');
   }
-  function adjustStock(id,delta){const items=getInventory(),it=items.find(x=>x.id===id);if(!it)return;it.qty=Math.max(0,parseFloat((it.qty+delta).toFixed(2)));writeInventory(items);}
-  function saveInvQty(id,val){const items=getInventory(),it=items.find(x=>x.id===id);if(!it)return;it.qty=Math.max(0,parseFloat(val)||0);writeInventory(items);}
+  function logInv(entry){if(db)db.ref('inventoryLog').push({...entry,date:new Date().toISOString(),user:cajeraName||'Admin'});}
+  async function loadInvLog(){
+    const el=$('inv-log-list');if(!el)return;
+    if(!db){el.innerHTML='<span style="color:#ccc;font-size:.85rem">Sin conexión.</span>';return;}
+    const snap=await db.ref('inventoryLog').orderByChild('date').limitToLast(50).once('value');
+    if(!snap.val()){el.innerHTML='<span style="color:#ccc;font-size:.85rem">Sin cambios registrados.</span>';return;}
+    const entries=Object.values(snap.val()).sort((a,b)=>new Date(b.date)-new Date(a.date));
+    el.innerHTML=entries.map(e=>{
+      const d=new Date(e.date);
+      const time=d.toLocaleDateString('es-MX',{day:'2-digit',month:'2-digit'})+' '+d.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'});
+      let icon='📝',deltaStr='',deltaCls='edit',desc='';
+      if(e.type==='adjust'||e.type==='set'){
+        const diff=parseFloat((e.newQty-e.oldQty).toFixed(2));
+        icon=diff>=0?'📈':'📉';deltaCls=diff>=0?'pos':'neg';
+        deltaStr=(diff>=0?'+':'')+diff+' '+e.unit;
+        desc=`<b>${e.name}</b>: ${e.oldQty} → ${e.newQty} ${e.unit}`;
+      } else if(e.type==='add'){
+        icon='➕';deltaCls='pos';deltaStr='+'+e.newQty+' '+e.unit;
+        desc=`<b>${e.name}</b> agregado`;
+      } else if(e.type==='edit'){
+        icon='✏️';desc=`<b>${e.name}</b> editado`;deltaStr='—';
+      }
+      return`<div class="inv-log-row"><span class="inv-log-time">${time}</span><span class="inv-log-icon">${icon}</span><span class="inv-log-desc">${desc} <span style="color:#aaa;font-size:.78rem">· ${e.user}</span></span><span class="inv-log-delta ${deltaCls}">${deltaStr}</span></div>`;
+    }).join('');
+  }
+  function adjustStock(id,delta){
+    const items=getInventory(),it=items.find(x=>x.id===id);if(!it)return;
+    const oldQty=it.qty;
+    it.qty=Math.max(0,parseFloat((it.qty+delta).toFixed(2)));
+    logInv({type:'adjust',itemId:id,name:it.name,unit:it.unit,oldQty,newQty:it.qty});
+    writeInventory(items);
+  }
+  function saveInvQty(id,val){
+    const items=getInventory(),it=items.find(x=>x.id===id);if(!it)return;
+    const oldQty=it.qty;
+    it.qty=Math.max(0,parseFloat(val)||0);
+    logInv({type:'set',itemId:id,name:it.name,unit:it.unit,oldQty,newQty:it.qty});
+    writeInventory(items);
+  }
   function addInvItem(){
     const name=$('inv-f-name').value.trim(),emoji=$('inv-f-emoji').value.trim()||'📦',unit=$('inv-f-unit').value,qty=parseFloat($('inv-f-qty').value)||0,minQty=parseFloat($('inv-f-min').value)||0;
     if(!name){toast('Escribe el nombre del artículo','error');return;}
     const items=getInventory();
     const id=name.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'')+'-'+Date.now().toString(36);
     items.push({id,name,emoji,unit,qty,minQty});
+    logInv({type:'add',itemId:id,name,unit,oldQty:0,newQty:qty});
     writeInventory(items);
     $('inv-f-name').value='';$('inv-f-emoji').value='';$('inv-f-qty').value='';$('inv-f-min').value='';
     toast('✅ Artículo agregado');
@@ -1247,7 +1305,7 @@ const App=(()=>{
   function writePromos(promos){cache.promos=promos;if(!db)return;if(!promos.length){db.ref('promos').remove();return;}const o={};promos.forEach(p=>o[p.id]=p);db.ref('promos').set(o);}
   function savePromo(){const name=document.getElementById('promo-name').value.trim(),type=document.getElementById('promo-type').value,value=parseFloat(document.getElementById('promo-value').value);if(!name){toast('Escribe el nombre','error');return;}if(!value||value<=0){toast('El valor debe ser mayor a 0','error');return;}const promos=getPromos();promos.push({id:uid(),name,type,value});writePromos(promos);document.getElementById('promo-name').value='';document.getElementById('promo-value').value='';renderPromosList();toast('Promocion agregada');}
   async function deletePromo(id){if(!await showConfirm('Eliminar esta promocion?'))return;writePromos(getPromos().filter(p=>p.id!==id));renderPromosList();toast('Eliminada','error');}
-  function renderPromosList(){const el=document.getElementById('promo-list-admin');if(!el)return;const promos=getPromos();if(!promos.length){el.innerHTML='<span style="color:#ccc">Sin promociones aun</span>';return;}el.innerHTML='<div class="promo-list">'+promos.map(p=>'<div class="promo-item"><div><div class="promo-name">'+p.name+'</div><div class="promo-val">'+(p.type==='pct'?p.value+'% de descuento':'$'+p.value+' de descuento')+'</div></div><button class="btn btn-sm btn-danger" onclick="App.deletePromo(\''+p.id+'\')">🗑️</button></div>').join('')+'</div>';}  function goTab(t){document.querySelectorAll('.admin-body>div').forEach(d=>d.style.display='none');document.querySelectorAll('.admin-tab').forEach(b=>b.classList.remove('active'));const tabs={products:0,categories:1,promos:2,inventory:3,sales:4,settings:5};$('tab-'+t).style.display='block';document.querySelectorAll('.admin-tab')[tabs[t]].classList.add('active');if(t==='sales')renderSales();if(t==='products'){fillCatSelect();renderProdTable();}if(t==='categories')renderCatsList();if(t==='promos')renderPromosList();if(t==='inventory')renderInventory();if(t==='settings')loadCfg();}
+  function renderPromosList(){const el=document.getElementById('promo-list-admin');if(!el)return;const promos=getPromos();if(!promos.length){el.innerHTML='<span style="color:#ccc">Sin promociones aun</span>';return;}el.innerHTML='<div class="promo-list">'+promos.map(p=>'<div class="promo-item"><div><div class="promo-name">'+p.name+'</div><div class="promo-val">'+(p.type==='pct'?p.value+'% de descuento':'$'+p.value+' de descuento')+'</div></div><button class="btn btn-sm btn-danger" onclick="App.deletePromo(\''+p.id+'\')">🗑️</button></div>').join('')+'</div>';}  function goTab(t){document.querySelectorAll('.admin-body>div').forEach(d=>d.style.display='none');document.querySelectorAll('.admin-tab').forEach(b=>b.classList.remove('active'));const tabs={products:0,categories:1,promos:2,inventory:3,sales:4,settings:5};$('tab-'+t).style.display='block';document.querySelectorAll('.admin-tab')[tabs[t]].classList.add('active');if(t==='sales')renderSales();if(t==='products'){fillCatSelect();renderProdTable();}if(t==='categories')renderCatsList();if(t==='promos')renderPromosList();if(t==='inventory'){renderInventory();loadInvLog();}if(t==='settings')loadCfg();}
 
   function loadCfg(){const c=getCfg();$('cfg-name').value=c.name||'';$('cfg-tel').value=c.tel||'';$('cfg-addr').value=c.addr||'';$('cfg-msg').value=c.msg||'';$('cfg-pin').value=c.pin||'';$('cfg-alert-email').value=c.alertEmail||'';$('cfg-gas').value=c.gas||'';}
   function saveSettings(){const cfg={name:$('cfg-name').value.trim()||'HR BURGER HOUSE',tel:$('cfg-tel').value.trim(),addr:$('cfg-addr').value.trim(),msg:$('cfg-msg').value.trim()||'¡Gracias por su preferencia!',pin:$('cfg-pin').value.trim()||'1234',alertEmail:$('cfg-alert-email').value.trim(),gas:$('cfg-gas').value.trim()};writeCfg(cfg);toast('✅ Ajustes guardados');}

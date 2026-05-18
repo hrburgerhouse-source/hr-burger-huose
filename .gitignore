@@ -1,0 +1,4 @@
+.claude/
+*.jpeg
+*.jpg
+!deploy/icon.jpeg

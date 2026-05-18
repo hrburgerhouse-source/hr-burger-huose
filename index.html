@@ -617,7 +617,12 @@ textarea.form-input{height:130px;resize:vertical;font-family:monospace;font-size
         <div class="form-group"><label class="form-label">Dirección</label><input type="text" class="form-input" id="cfg-addr" placeholder="Calle, Ciudad"></div>
         <div class="form-group"><label class="form-label">Mensaje en Ticket</label><input type="text" class="form-input" id="cfg-msg" placeholder="¡Gracias por su preferencia!"></div>
         <div class="form-group"><label class="form-label">PIN de Admin (4 dígitos)</label><input type="password" class="form-input" id="cfg-pin" placeholder="1234" maxlength="4"></div>
-        <div class="form-group"><label class="form-label">Correo para alertas de inventario</label><input type="email" class="form-input" id="cfg-alert-email" placeholder="correo@ejemplo.com"></div>
+        <div class="form-group"><label class="form-label">Correo para alertas de inventario</label>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input type="email" class="form-input" id="cfg-alert-email" placeholder="correo@ejemplo.com" style="flex:1">
+            <button class="btn btn-outline btn-sm" onclick="App.sendTestEmail()" style="white-space:nowrap">📧 Probar correo</button>
+          </div>
+        </div>
         <div class="form-group"><label class="form-label">URL de Google Apps Script (para Excel)</label><input type="text" class="form-input" id="cfg-gas" placeholder="https://script.google.com/macros/s/..."></div>
         <button class="btn btn-primary" onclick="App.saveSettings()">💾 Guardar Ajustes</button>
       </div>
@@ -1158,6 +1163,13 @@ const App=(()=>{
     } else {
       bar.style.display='none';
     }
+  }
+  function sendTestEmail(){
+    const email=$('cfg-alert-email').value.trim()||getCfg().alertEmail||'';
+    if(!email){toast('Primero escribe el correo de alertas en Ajustes','error');return;}
+    const subject=encodeURIComponent('[HR Burger] Correo de prueba');
+    const body=encodeURIComponent('Hola,\n\nEste es un correo de prueba del sistema HR Burger House.\nSi lo recibes, el correo de alertas de inventario está configurado correctamente.\n\nFecha: '+new Date().toLocaleString('es-MX'));
+    window.location.href='mailto:'+email+'?subject='+subject+'&body='+body;
   }
   function sendStockAlert(){
     const low=getInventory().filter(i=>invStatus(i)!=='ok');

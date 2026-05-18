@@ -1138,13 +1138,20 @@ const App=(()=>{
           <button type="button" title="Cambiar emoji" onclick="App.openInvEmojiPicker('${item.id}')" style="font-size:1.5rem;background:none;border:none;cursor:pointer;padding:2px;border-radius:6px" onmouseenter="this.style.background='#f0f0f0'" onmouseleave="this.style.background='none'">${item.emoji||'📦'}</button>
           <div class="emoji-grid" id="inv-ep-${item.id}"></div>
         </div>
-        <div class="inv-name">${item.name}<span class="inv-unit-lbl"> · ${item.unit} · mín ${item.minQty}</span></div>
+        <div class="inv-name" id="inv-name-${item.id}">${item.name}<span class="inv-unit-lbl"> · ${item.unit} · mín ${item.minQty}</span></div>
+        <div id="inv-edit-${item.id}" style="display:none;flex:1;display:none;gap:6px;align-items:center;flex-wrap:wrap">
+          <input id="inv-edit-name-${item.id}" class="form-input" style="flex:1;min-width:120px;padding:5px 8px;font-size:.85rem" value="${item.name}" placeholder="Nombre">
+          <input id="inv-edit-min-${item.id}" class="form-input" style="width:70px;padding:5px 8px;font-size:.85rem" type="number" value="${item.minQty}" min="0" step=".5" placeholder="Mín">
+          <button class="btn btn-sm btn-success" onclick="App.saveInvEdit('${item.id}')">✓</button>
+          <button class="btn btn-sm btn-outline" onclick="App.cancelInvEdit('${item.id}')">✕</button>
+        </div>
         <div class="inv-qty-wrap">
           <button class="inv-qty-btn" onclick="App.adjustStock('${item.id}',-1)">−</button>
           <input class="inv-qty-input" type="number" value="${item.qty}" min="0" step=".5" onchange="App.saveInvQty('${item.id}',this.value)">
           <button class="inv-qty-btn" onclick="App.adjustStock('${item.id}',1)">+</button>
         </div>
         <span class="inv-status-badge ${badgeCls}">${badge}</span>
+        <button class="btn btn-sm btn-outline" onclick="App.startInvEdit('${item.id}')" style="padding:4px 8px" title="Editar nombre y mínimo">✏️</button>
         <button class="btn btn-sm btn-danger" onclick="App.deleteInvItem('${item.id}')" style="padding:4px 8px">🗑️</button>
       </div>`;
     }).join('');
@@ -1162,6 +1169,16 @@ const App=(()=>{
       });
     }
     grid.classList.add('open');
+  }
+  function startInvEdit(id){$('inv-name-'+id).style.display='none';const ed=$('inv-edit-'+id);ed.style.display='flex';}
+  function cancelInvEdit(id){$('inv-name-'+id).style.display='';$('inv-edit-'+id).style.display='none';}
+  function saveInvEdit(id){
+    const name=($('inv-edit-name-'+id).value||'').trim();
+    const minQty=parseFloat($('inv-edit-min-'+id).value)||0;
+    if(!name){toast('El nombre no puede estar vacío','error');return;}
+    const items=getInventory(),it=items.find(x=>x.id===id);
+    if(it){it.name=name;it.minQty=minQty;writeInventory(items);}
+    toast('✅ Artículo actualizado');
   }
   function adjustStock(id,delta){const items=getInventory(),it=items.find(x=>x.id===id);if(!it)return;it.qty=Math.max(0,parseFloat((it.qty+delta).toFixed(2)));writeInventory(items);}
   function saveInvQty(id,val){const items=getInventory(),it=items.find(x=>x.id===id);if(!it)return;it.qty=Math.max(0,parseFloat(val)||0);writeInventory(items);}

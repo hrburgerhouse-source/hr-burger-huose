@@ -203,6 +203,20 @@ textarea.form-input{height:130px;resize:vertical;font-family:monospace;font-size
 .corte-sale-num{font-weight:800;color:var(--dark);min-width:50px}.corte-sale-time{color:#aaa;font-size:.78rem;flex:1;padding:0 10px}
 .corte-sale-pay{margin-right:10px}.corte-sale-total{font-weight:900;color:var(--primary);min-width:70px;text-align:right}
 .corte-grand-total{background:linear-gradient(135deg,var(--primary) 0%,var(--primary-dark) 100%);border-radius:12px;padding:18px 22px;display:flex;justify-content:space-between;align-items:center;color:white;margin-bottom:20px}
+/* INVENTORY */
+.inv-grid{display:flex;flex-direction:column;gap:10px}
+.inv-item{display:flex;align-items:center;gap:12px;background:white;border-radius:12px;padding:14px 16px;box-shadow:0 2px 8px rgba(0,0,0,.06);border-left:4px solid #e8e8e8}
+.inv-item.inv-ok{border-left-color:#27ae60}.inv-item.inv-low{border-left-color:#f39c12}.inv-item.inv-out{border-left-color:#e74c3c}
+.inv-name{flex:1;font-weight:700;font-size:.95rem;color:var(--dark)}
+.inv-unit-lbl{font-size:.75rem;color:#aaa;font-weight:400}
+.inv-qty-wrap{display:flex;align-items:center;gap:6px}
+.inv-qty-btn{width:30px;height:30px;border:2px solid #e8e8e8;border-radius:8px;background:white;cursor:pointer;font-size:1.1rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.inv-qty-btn:hover{background:var(--primary);color:white;border-color:var(--primary)}
+.inv-qty-input{width:70px;text-align:center;border:2px solid #e8e8e8;border-radius:8px;padding:5px 8px;font-size:.95rem;font-weight:700}
+.inv-status-badge{font-size:.72rem;font-weight:800;padding:3px 8px;border-radius:50px}
+.inv-status-badge.ok{background:#d1fae5;color:#065f46}.inv-status-badge.low{background:#fef3c7;color:#92400e}.inv-status-badge.out{background:#fee2e2;color:#991b1b}
+.inv-alert-bar{background:#fef3c7;border:1.5px solid #f59e0b;border-radius:12px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.inv-alert-text{font-weight:700;color:#92400e;font-size:.9rem;flex:1}
 .corte-grand-label{font-size:1rem;font-weight:700}.corte-grand-amount{font-size:1.6rem;font-weight:900}
 .corte-actions{display:flex;gap:10px}.corte-actions .btn{flex:1;justify-content:center}
 .btn-corte-print{background:linear-gradient(135deg,var(--dark) 0%,#34495e 100%);color:white}
@@ -477,6 +491,7 @@ textarea.form-input{height:130px;resize:vertical;font-family:monospace;font-size
     <button class="admin-tab active" onclick="App.goTab('products')">🍔 Productos</button>
     <button class="admin-tab" onclick="App.goTab('categories')">📂 Categorías</button>
     <button class="admin-tab" onclick="App.goTab('promos')">🏷️ Promociones</button>
+    <button class="admin-tab" onclick="App.goTab('inventory')">📦 Inventario</button>
     <button class="admin-tab" onclick="App.goTab('sales')">📊 Ventas</button>
     <button class="admin-tab" onclick="App.goTab('settings')">⚙️ Ajustes</button>
   </div>
@@ -546,6 +561,35 @@ textarea.form-input{height:130px;resize:vertical;font-family:monospace;font-size
         <div id="promo-list-admin"><span style="color:#ccc">Sin promociones aún</span></div>
       </div>
     </div>
+    <!-- INVENTORY TAB -->
+    <div id="tab-inventory" style="display:none">
+      <div id="inv-alert-bar" class="inv-alert-bar" style="display:none">
+        <span class="inv-alert-text" id="inv-alert-msg">⚠️ Artículos con stock bajo</span>
+        <button class="btn btn-sm btn-primary" onclick="App.sendStockAlert()">📧 Enviar alerta por correo</button>
+      </div>
+      <div class="form-card">
+        <div class="form-card-title">📦 Stock actual</div>
+        <div id="inv-list" class="inv-grid"><span style="color:#ccc;font-size:.88rem">Cargando inventario...</span></div>
+      </div>
+      <div class="form-card" style="margin-top:16px">
+        <div class="form-card-title">➕ Agregar artículo</div>
+        <div class="form-row form-gap">
+          <div class="form-group" style="flex:2"><label class="form-label">Nombre</label><input type="text" class="form-input" id="inv-f-name" placeholder="Ej: Carne de Res"></div>
+          <div class="form-group"><label class="form-label">Unidad</label>
+            <select class="form-select" id="inv-f-unit">
+              <option value="kg">kg</option>
+              <option value="piezas">piezas</option>
+              <option value="litros">litros</option>
+              <option value="cajas">cajas</option>
+              <option value="unidades">unidades</option>
+            </select>
+          </div>
+          <div class="form-group"><label class="form-label">Stock inicial</label><input type="number" class="form-input" id="inv-f-qty" placeholder="0" min="0" step=".5"></div>
+          <div class="form-group"><label class="form-label">Mínimo (alerta)</label><input type="number" class="form-input" id="inv-f-min" placeholder="2" min="0" step=".5"></div>
+        </div>
+        <button class="btn btn-primary" onclick="App.addInvItem()">➕ Agregar artículo</button>
+      </div>
+    </div>
     <!-- SALES TAB -->
     <div id="tab-sales" style="display:none">
       <div class="stats-row">
@@ -573,6 +617,7 @@ textarea.form-input{height:130px;resize:vertical;font-family:monospace;font-size
         <div class="form-group"><label class="form-label">Dirección</label><input type="text" class="form-input" id="cfg-addr" placeholder="Calle, Ciudad"></div>
         <div class="form-group"><label class="form-label">Mensaje en Ticket</label><input type="text" class="form-input" id="cfg-msg" placeholder="¡Gracias por su preferencia!"></div>
         <div class="form-group"><label class="form-label">PIN de Admin (4 dígitos)</label><input type="password" class="form-input" id="cfg-pin" placeholder="1234" maxlength="4"></div>
+        <div class="form-group"><label class="form-label">Correo para alertas de inventario</label><input type="email" class="form-input" id="cfg-alert-email" placeholder="correo@ejemplo.com"></div>
         <div class="form-group"><label class="form-label">URL de Google Apps Script (para Excel)</label><input type="text" class="form-input" id="cfg-gas" placeholder="https://script.google.com/macros/s/..."></div>
         <button class="btn btn-primary" onclick="App.saveSettings()">💾 Guardar Ajustes</button>
       </div>
@@ -705,6 +750,7 @@ const App=(()=>{
   let cart=[],payMethod='cash',pinBuf='',filterCat='all',clockTimer=null,cajeraName='',db=null;
   const cache={products:[],categories:[],settings:{},orderNumber:1};
   const DEF_CATS=[{id:'burgers',name:'Hamburguesas',emoji:'🍔'},{id:'drinks',name:'Bebidas',emoji:'🥤'},{id:'sides',name:'Acompañantes',emoji:'🍟'},{id:'otros',name:'Otros',emoji:'🍽️'},{id:'personal',name:'Personal',emoji:'👨‍🍳'}];
+  const DEF_INV=[{id:'carne-res',name:'Carne de Res',emoji:'🥩',unit:'kg',qty:10,minQty:2},{id:'carne-cerdo',name:'Carne de Cerdo',emoji:'🐷',unit:'kg',qty:10,minQty:2},{id:'pan',name:'Pan de Hamburguesa',emoji:'🍞',unit:'piezas',qty:50,minQty:10},{id:'bebidas',name:'Bebidas',emoji:'🥤',unit:'unidades',qty:30,minQty:5}];
   const DEF_CFG={name:'HR BURGER HOUSE',tel:'',addr:'',msg:'¡Gracias por su preferencia!',pin:'1234'};
   const GAS_URL=()=>getCfg().gas||'';
   const $=id=>document.getElementById(id);
@@ -756,6 +802,8 @@ const App=(()=>{
     db.ref('settings').on('value',s=>{if(s.val())cache.settings=s.val();});
     db.ref('orderNumber').on('value',s=>{cache.orderNumber=s.val()||1;const el=$('order-num-display');if(el)el.textContent='#'+String(cache.orderNumber).padStart(3,'0');});
     db.ref('promos').on('value',s=>{cache.promos=s.val()?Object.values(s.val()):[];if($('promo-list-admin'))renderPromosList();});
+    db.ref('inventory').on('value',s=>{cache.inventory=s.val()?Object.values(s.val()):[];if($('inv-list'))renderInventory();});
+    if(!ex.inventory){const o={};DEF_INV.forEach(i=>o[i.id]=i);db.ref('inventory').set(o);}
   }
 
   function embedLogo(){
@@ -1062,13 +1110,75 @@ const App=(()=>{
     const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download='ventas-'+localDate()+'.csv';a.click();
   }
 
+  function getInventory(){return cache.inventory||[];}
+  function writeInventory(items){cache.inventory=items;if(!db)return;if(!items.length){db.ref('inventory').remove();return;}const o={};items.forEach(i=>o[i.id]=i);db.ref('inventory').set(o);}
+  function invStatus(item){if(item.qty<=0)return'out';if(item.qty<=item.minQty)return'low';return'ok';}
+  function renderInventory(){
+    const el=$('inv-list');if(!el)return;
+    const items=getInventory();
+    if(!items.length){el.innerHTML='<span style="color:#ccc;font-size:.88rem">Sin artículos. Agrega tu primer artículo abajo.</span>';checkInvAlert();return;}
+    el.innerHTML=items.map(item=>{
+      const st=invStatus(item);
+      const badge={ok:'🟢 OK',low:'🟡 Stock bajo',out:'🔴 Agotado'}[st];
+      const badgeCls={ok:'ok',low:'low',out:'out'}[st];
+      return`<div class="inv-item inv-${st}">
+        <span style="font-size:1.5rem">${item.emoji||'📦'}</span>
+        <div class="inv-name">${item.name}<span class="inv-unit-lbl"> · ${item.unit} · mín ${item.minQty}</span></div>
+        <div class="inv-qty-wrap">
+          <button class="inv-qty-btn" onclick="App.adjustStock('${item.id}',-1)">−</button>
+          <input class="inv-qty-input" type="number" value="${item.qty}" min="0" step=".5" onchange="App.saveInvQty('${item.id}',this.value)">
+          <button class="inv-qty-btn" onclick="App.adjustStock('${item.id}',1)">+</button>
+        </div>
+        <span class="inv-status-badge ${badgeCls}">${badge}</span>
+        <button class="btn btn-sm btn-danger" onclick="App.deleteInvItem('${item.id}')" style="padding:4px 8px">🗑️</button>
+      </div>`;
+    }).join('');
+    checkInvAlert();
+  }
+  function adjustStock(id,delta){const items=getInventory(),it=items.find(x=>x.id===id);if(!it)return;it.qty=Math.max(0,parseFloat((it.qty+delta).toFixed(2)));writeInventory(items);}
+  function saveInvQty(id,val){const items=getInventory(),it=items.find(x=>x.id===id);if(!it)return;it.qty=Math.max(0,parseFloat(val)||0);writeInventory(items);}
+  function addInvItem(){
+    const name=$('inv-f-name').value.trim(),unit=$('inv-f-unit').value,qty=parseFloat($('inv-f-qty').value)||0,minQty=parseFloat($('inv-f-min').value)||0;
+    if(!name){toast('Escribe el nombre del artículo','error');return;}
+    const items=getInventory();
+    const id=name.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'')+'-'+Date.now().toString(36);
+    items.push({id,name,emoji:'📦',unit,qty,minQty});
+    writeInventory(items);
+    $('inv-f-name').value='';$('inv-f-qty').value='';$('inv-f-min').value='';
+    toast('✅ Artículo agregado');
+  }
+  async function deleteInvItem(id){if(!await showConfirm('¿Eliminar este artículo del inventario?'))return;writeInventory(getInventory().filter(i=>i.id!==id));toast('Eliminado','error');}
+  function checkInvAlert(){
+    const low=getInventory().filter(i=>invStatus(i)!=='ok');
+    const bar=$('inv-alert-bar'),msg=$('inv-alert-msg');
+    if(!bar)return;
+    if(low.length){
+      bar.style.display='flex';
+      if(msg)msg.textContent='⚠️ '+low.length+' artículo'+(low.length>1?'s':'')+' con stock bajo: '+low.map(i=>i.name).join(', ');
+    } else {
+      bar.style.display='none';
+    }
+  }
+  function sendStockAlert(){
+    const low=getInventory().filter(i=>invStatus(i)!=='ok');
+    if(!low.length){toast('Todo el inventario está en buen nivel ✅');return;}
+    const cfg=getCfg();
+    const to=cfg.alertEmail||'';
+    const subject=encodeURIComponent('[HR Burger] Alerta de inventario bajo');
+    const body=encodeURIComponent(
+      'Alerta de inventario - '+new Date().toLocaleDateString('es-MX')+'\n\n'+
+      low.map(i=>{const st=invStatus(i);return(st==='out'?'🔴 AGOTADO':'🟡 BAJO')+': '+i.name+' — '+i.qty+' '+i.unit+' (mínimo: '+i.minQty+')';}).join('\n')+
+      '\n\nPor favor reabastecer a la brevedad.\n— Sistema HR Burger House'
+    );
+    window.location.href='mailto:'+to+'?subject='+subject+'&body='+body;
+  }
   function writePromos(promos){cache.promos=promos;if(!db)return;if(!promos.length){db.ref('promos').remove();return;}const o={};promos.forEach(p=>o[p.id]=p);db.ref('promos').set(o);}
   function savePromo(){const name=document.getElementById('promo-name').value.trim(),type=document.getElementById('promo-type').value,value=parseFloat(document.getElementById('promo-value').value);if(!name){toast('Escribe el nombre','error');return;}if(!value||value<=0){toast('El valor debe ser mayor a 0','error');return;}const promos=getPromos();promos.push({id:uid(),name,type,value});writePromos(promos);document.getElementById('promo-name').value='';document.getElementById('promo-value').value='';renderPromosList();toast('Promocion agregada');}
   async function deletePromo(id){if(!await showConfirm('Eliminar esta promocion?'))return;writePromos(getPromos().filter(p=>p.id!==id));renderPromosList();toast('Eliminada','error');}
-  function renderPromosList(){const el=document.getElementById('promo-list-admin');if(!el)return;const promos=getPromos();if(!promos.length){el.innerHTML='<span style="color:#ccc">Sin promociones aun</span>';return;}el.innerHTML='<div class="promo-list">'+promos.map(p=>'<div class="promo-item"><div><div class="promo-name">'+p.name+'</div><div class="promo-val">'+(p.type==='pct'?p.value+'% de descuento':'$'+p.value+' de descuento')+'</div></div><button class="btn btn-sm btn-danger" onclick="App.deletePromo(\''+p.id+'\')">🗑️</button></div>').join('')+'</div>';}  function goTab(t){document.querySelectorAll('.admin-body>div').forEach(d=>d.style.display='none');document.querySelectorAll('.admin-tab').forEach(b=>b.classList.remove('active'));const tabs={products:0,categories:1,promos:2,sales:3,settings:4};$('tab-'+t).style.display='block';document.querySelectorAll('.admin-tab')[tabs[t]].classList.add('active');if(t==='sales')renderSales();if(t==='products'){fillCatSelect();renderProdTable();}if(t==='categories')renderCatsList();if(t==='promos')renderPromosList();if(t==='settings')loadCfg();}
+  function renderPromosList(){const el=document.getElementById('promo-list-admin');if(!el)return;const promos=getPromos();if(!promos.length){el.innerHTML='<span style="color:#ccc">Sin promociones aun</span>';return;}el.innerHTML='<div class="promo-list">'+promos.map(p=>'<div class="promo-item"><div><div class="promo-name">'+p.name+'</div><div class="promo-val">'+(p.type==='pct'?p.value+'% de descuento':'$'+p.value+' de descuento')+'</div></div><button class="btn btn-sm btn-danger" onclick="App.deletePromo(\''+p.id+'\')">🗑️</button></div>').join('')+'</div>';}  function goTab(t){document.querySelectorAll('.admin-body>div').forEach(d=>d.style.display='none');document.querySelectorAll('.admin-tab').forEach(b=>b.classList.remove('active'));const tabs={products:0,categories:1,promos:2,inventory:3,sales:4,settings:5};$('tab-'+t).style.display='block';document.querySelectorAll('.admin-tab')[tabs[t]].classList.add('active');if(t==='sales')renderSales();if(t==='products'){fillCatSelect();renderProdTable();}if(t==='categories')renderCatsList();if(t==='promos')renderPromosList();if(t==='inventory')renderInventory();if(t==='settings')loadCfg();}
 
-  function loadCfg(){const c=getCfg();$('cfg-name').value=c.name||'';$('cfg-tel').value=c.tel||'';$('cfg-addr').value=c.addr||'';$('cfg-msg').value=c.msg||'';$('cfg-pin').value=c.pin||'';$('cfg-gas').value=c.gas||'';}
-  function saveSettings(){const cfg={name:$('cfg-name').value.trim()||'HR BURGER HOUSE',tel:$('cfg-tel').value.trim(),addr:$('cfg-addr').value.trim(),msg:$('cfg-msg').value.trim()||'¡Gracias por su preferencia!',pin:$('cfg-pin').value.trim()||'1234',gas:$('cfg-gas').value.trim()};writeCfg(cfg);toast('✅ Ajustes guardados');}
+  function loadCfg(){const c=getCfg();$('cfg-name').value=c.name||'';$('cfg-tel').value=c.tel||'';$('cfg-addr').value=c.addr||'';$('cfg-msg').value=c.msg||'';$('cfg-pin').value=c.pin||'';$('cfg-alert-email').value=c.alertEmail||'';$('cfg-gas').value=c.gas||'';}
+  function saveSettings(){const cfg={name:$('cfg-name').value.trim()||'HR BURGER HOUSE',tel:$('cfg-tel').value.trim(),addr:$('cfg-addr').value.trim(),msg:$('cfg-msg').value.trim()||'¡Gracias por su preferencia!',pin:$('cfg-pin').value.trim()||'1234',alertEmail:$('cfg-alert-email').value.trim(),gas:$('cfg-gas').value.trim()};writeCfg(cfg);toast('✅ Ajustes guardados');}
 
   function forceUpdate(){
     if('caches' in window)caches.keys().then(ks=>Promise.all(ks.map(k=>caches.delete(k))));

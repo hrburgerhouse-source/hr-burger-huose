@@ -558,6 +558,11 @@ textarea.form-input{height:130px;resize:vertical;font-family:monospace;font-size
         <button class="btn btn-primary" onclick="App.saveSettings()">💾 Guardar Ajustes</button>
       </div>
       <div class="form-card" style="margin-top:16px">
+        <div class="form-card-title">🔄 Actualización</div>
+        <div style="font-size:.85rem;color:#666;margin-bottom:12px">Si el sistema no muestra los últimos cambios, presiona este botón.</div>
+        <button class="btn btn-outline" onclick="App.forceUpdate()">🔄 Actualizar App Ahora</button>
+      </div>
+      <div class="form-card" style="margin-top:16px">
         <div class="form-card-title">🖨️ Impresora Bluetooth</div>
         <div class="bt-status">
           <div class="bt-dot" id="bt-dot"></div>
@@ -1030,6 +1035,11 @@ const App=(()=>{
   function loadCfg(){const c=getCfg();$('cfg-name').value=c.name||'';$('cfg-tel').value=c.tel||'';$('cfg-addr').value=c.addr||'';$('cfg-msg').value=c.msg||'';$('cfg-pin').value=c.pin||'';$('cfg-gas').value=c.gas||'';}
   function saveSettings(){const cfg={name:$('cfg-name').value.trim()||'HR BURGER HOUSE',tel:$('cfg-tel').value.trim(),addr:$('cfg-addr').value.trim(),msg:$('cfg-msg').value.trim()||'¡Gracias por su preferencia!',pin:$('cfg-pin').value.trim()||'1234',gas:$('cfg-gas').value.trim()};writeCfg(cfg);toast('✅ Ajustes guardados');}
 
+  function forceUpdate(){
+    if('caches' in window)caches.keys().then(ks=>Promise.all(ks.map(k=>caches.delete(k))));
+    if('serviceWorker' in navigator)navigator.serviceWorker.getRegistrations().then(regs=>regs.forEach(r=>r.unregister()));
+    window.location.reload(true);
+  }
   function openPrinterModal(){BTPrinter.updateUI();$('modal-printer').classList.add('show');}
   function closePrinterModal(){$('modal-printer').classList.remove('show');}
   async function btConnect(){const ok=await BTPrinter.connect();if(ok)toast('Impresora conectada');else toast('No se pudo conectar','error');}
@@ -1047,7 +1057,7 @@ const App=(()=>{
       {type:'center',text:'¡Listo para imprimir!'},
     ])).then(()=>toast('Prueba enviada'));
   }
-  return{init,saveFirebaseConfig,resetFirebase,loginCajera,confirmCajera,closeModalCajera,logout,showPin,closePin,pinKey,pinDel,pinEnter,setFilterCat,renderProducts,addToCart,changeQty,clearCart,openCheckout,closeCheckout,selPay,calcChange,calcDiscount,applyPromo,setDiscType,completeSale,openMiHistorial,closeMiHistorial,openCorte,closeCorte,printCorte,openPrinterModal,closePrinterModal,goTab,saveProduct,editProduct,cancelEdit,deleteProd,toggleProd,renderProdTable,addCat,delCat,renderSales,reprint,clearSales,exportCSV,saveSettings,switchTab,savePromo,deletePromo,renderPromosList,btConnect,btDisconnect,btTest};
+  return{init,saveFirebaseConfig,resetFirebase,loginCajera,confirmCajera,closeModalCajera,logout,showPin,closePin,pinKey,pinDel,pinEnter,setFilterCat,renderProducts,addToCart,changeQty,clearCart,openCheckout,closeCheckout,selPay,calcChange,calcDiscount,applyPromo,setDiscType,completeSale,openMiHistorial,closeMiHistorial,openCorte,closeCorte,printCorte,openPrinterModal,closePrinterModal,forceUpdate,goTab,saveProduct,editProduct,cancelEdit,deleteProd,toggleProd,renderProdTable,addCat,delCat,renderSales,reprint,clearSales,exportCSV,saveSettings,switchTab,savePromo,deletePromo,renderPromosList,btConnect,btDisconnect,btTest};
 })();
 document.addEventListener('DOMContentLoaded',()=>App.init());
 </script>

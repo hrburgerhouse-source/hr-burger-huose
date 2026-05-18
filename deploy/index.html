@@ -1141,6 +1141,13 @@ const App=(()=>{
         <div class="inv-name" id="inv-name-${item.id}">${item.name}<span class="inv-unit-lbl"> · ${item.unit} · mín ${item.minQty}</span></div>
         <div id="inv-edit-${item.id}" style="display:none;flex:1;display:none;gap:6px;align-items:center;flex-wrap:wrap">
           <input id="inv-edit-name-${item.id}" class="form-input" style="flex:1;min-width:120px;padding:5px 8px;font-size:.85rem" value="${item.name}" placeholder="Nombre">
+          <select id="inv-edit-unit-${item.id}" class="form-select" style="width:90px;padding:5px 8px;font-size:.85rem">
+            <option value="kg" ${item.unit==='kg'?'selected':''}>kg</option>
+            <option value="piezas" ${item.unit==='piezas'?'selected':''}>piezas</option>
+            <option value="litros" ${item.unit==='litros'?'selected':''}>litros</option>
+            <option value="cajas" ${item.unit==='cajas'?'selected':''}>cajas</option>
+            <option value="unidades" ${item.unit==='unidades'?'selected':''}>unidades</option>
+          </select>
           <input id="inv-edit-min-${item.id}" class="form-input" style="width:70px;padding:5px 8px;font-size:.85rem" type="number" value="${item.minQty}" min="0" step=".5" placeholder="Mín">
           <button class="btn btn-sm btn-success" onclick="App.saveInvEdit('${item.id}')">✓</button>
           <button class="btn btn-sm btn-outline" onclick="App.cancelInvEdit('${item.id}')">✕</button>
@@ -1174,10 +1181,11 @@ const App=(()=>{
   function cancelInvEdit(id){$('inv-name-'+id).style.display='';$('inv-edit-'+id).style.display='none';}
   function saveInvEdit(id){
     const name=($('inv-edit-name-'+id).value||'').trim();
+    const unit=$('inv-edit-unit-'+id).value;
     const minQty=parseFloat($('inv-edit-min-'+id).value)||0;
     if(!name){toast('El nombre no puede estar vacío','error');return;}
     const items=getInventory(),it=items.find(x=>x.id===id);
-    if(it){it.name=name;it.minQty=minQty;writeInventory(items);}
+    if(it){it.name=name;it.unit=unit;it.minQty=minQty;writeInventory(items);}
     toast('✅ Artículo actualizado');
   }
   function adjustStock(id,delta){const items=getInventory(),it=items.find(x=>x.id===id);if(!it)return;it.qty=Math.max(0,parseFloat((it.qty+delta).toFixed(2)));writeInventory(items);}

@@ -904,17 +904,23 @@ const App=(()=>{
       lines.push({type:'row',left:'Cajera: '+sale.cajera,right:d.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})});
       lines.push({type:'hr'});
       (sale.items||[]).forEach(i=>{
-        lines.push({type:'row',left:i.qty+'x '+i.name,right:i.price===0?'GRATIS':fmt(i.price*i.qty)});
+        lines.push({type:'text',text:i.qty+'x '+i.name});
+        lines.push({type:'row',left:'',right:i.price===0?'GRATIS':fmt(i.price*i.qty)});
       });
       lines.push({type:'hr'});
       if(sale.discount>0){
-        lines.push({type:'row',left:'Subtotal',right:fmt(sale.subtotal)});
-        lines.push({type:'row',left:'Descuento',right:'-'+fmt(sale.discount)});
+        lines.push({type:'text',text:'Subtotal'});
+        lines.push({type:'row',left:'',right:fmt(sale.subtotal)});
+        lines.push({type:'text',text:'Descuento'});
+        lines.push({type:'row',left:'',right:'-'+fmt(sale.discount)});
       }
-      lines.push({type:'row',left:'TOTAL',right:fmt(sale.total)});
+      lines.push({type:'text',text:'TOTAL'});
+      lines.push({type:'row',left:'',right:fmt(sale.total)});
       if(sale.pay==='cash'){
-        lines.push({type:'row',left:'Recibido',right:fmt(sale.received)});
-        lines.push({type:'row',left:'Cambio',right:fmt(change)});
+        lines.push({type:'text',text:'Recibido'});
+        lines.push({type:'row',left:'',right:fmt(sale.received)});
+        lines.push({type:'text',text:'Cambio'});
+        lines.push({type:'row',left:'',right:fmt(change)});
       }
       lines.push({type:'hr'});
       lines.push({type:'center',text:cfg.msg||'¡Gracias por su preferencia!'});

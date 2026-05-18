@@ -522,6 +522,11 @@ textarea.form-input{height:130px;resize:vertical;font-family:monospace;font-size
             </div>
           </div>
         </div>
+        <div class="form-group" style="margin-top:4px">
+          <label class="form-label">📦 Descontar del inventario (por unidad vendida)</label>
+          <div id="recipe-rows" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px"></div>
+          <button type="button" class="btn btn-outline btn-sm" onclick="App.addRecipeRow()">+ Agregar ingrediente</button>
+        </div>
         <div class="form-actions">
           <button class="btn btn-primary" onclick="App.saveProduct()"><span id="save-prod-label">💾 Guardar Producto</span></button>
           <button class="btn btn-outline" id="cancel-edit-btn" style="display:none" onclick="App.cancelEdit()">✕ Cancelar</button>
@@ -957,6 +962,20 @@ const App=(()=>{
     const change=payMethod==='cash'?rec-total:0;
     printTicket(sale,change,cfg);
     closeCheckout();cart=[];renderCart();toast('✅ Venta completada');
+    // descontar inventario
+    const invItems=getInventory();let invChanged=false;
+    sale.items.forEach(cartItem=>{
+      const prod=getProds().find(p=>p.id===cartItem.id);
+      if(!prod||!prod.recipe||!prod.recipe.length)return;
+      prod.recipe.forEach(r=>{
+        const it=invItems.find(x=>x.id===r.invId);if(!it)return;
+        const oldQty=it.qty;
+        it.qty=Math.max(0,parseFloat((it.qty-r.qty*cartItem.qty).toFixed(3)));
+        logInv({type:'adjust',itemId:it.id,name:it.name,unit:it.unit,oldQty,newQty:it.qty});
+        invChanged=true;
+      });
+    });
+    if(invChanged)writeInventory(invItems);
     const gasUrl=GAS_URL();if(gasUrl){try{fetch(gasUrl,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},body:JSON.stringify({orden:String(orderN).padStart(3,'0'),fecha:new Date().toLocaleDateString('es-MX'),hora:new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}),cajera:cajeraName,productos:sale.items.map(i=>i.qty+'x '+i.name).join(' | '),subtotal:subtotal.toFixed(2),descuento:disc.toFixed(2),total:total.toFixed(2),pago:payMethod==='cash'?'Efectivo':payMethod==='card'?'Tarjeta':'Transferencia',recibido:rec.toFixed(2),cambio:change.toFixed(2)})});}catch(e){}}
   }
 
@@ -1102,16 +1121,32 @@ const App=(()=>{
     if(!list.length){tbody.innerHTML='<tr><td colspan="6" class="empty-table">Sin productos. Agrega tu primer producto arriba.</td></tr>';return;}
     tbody.innerHTML=list.map(p=>{const cat=cats.find(c=>c.id===p.cat);return`<tr><td class="prod-emoji-cell">${p.emoji||'🍽️'}</td><td class="prod-name-cell">${p.name}</td><td class="prod-cat-cell">${cat?cat.emoji+' '+cat.name:p.cat}</td><td class="prod-price-cell" style="${p.price===0?'color:var(--success);font-weight:900':''}">${p.price===0?'🎁 GRATIS':fmt(p.price)}</td><td><button class="toggle-switch ${p.on!==false?'on':'off'}" onclick="App.toggleProd('${p.id}')"></button></td><td><div class="prod-actions"><button class="btn btn-sm btn-outline" onclick="App.editProduct('${p.id}')">✏️ Editar</button><button class="btn btn-sm btn-danger" onclick="App.deleteProd('${p.id}')">🗑️</button></div></td></tr>`;}).join('');
   }
+  let _recipe=[];
+  function recipeInvOptions(){return getInventory().map(i=>`<option value="${i.id}">${i.emoji||'📦'} ${i.name} (${i.unit})</option>`).join('');}
+  function addRecipeRow(invId='',qty=''){
+    _recipe.push({_id:uid()});
+    const row=_recipe[_recipe.length-1];
+    const div=document.createElement('div');
+    div.id='rrow-'+row._id;
+    div.style.cssText='display:flex;gap:6px;align-items:center';
+    div.innerHTML=`<select class="form-select" style="flex:1;padding:5px 8px;font-size:.85rem" id="r-inv-${row._id}"><option value="">-- artículo --</option>${recipeInvOptions()}</select><input type="number" class="form-input" style="width:72px;padding:5px 8px;font-size:.85rem" id="r-qty-${row._id}" placeholder="cant." min="0" step=".01" value="${qty}"><button type="button" class="btn btn-sm btn-danger" style="padding:4px 8px" onclick="App.removeRecipeRow('${row._id}')">✕</button>`;
+    $('recipe-rows').appendChild(div);
+    if(invId)document.getElementById('r-inv-'+row._id).value=invId;
+  }
+  function removeRecipeRow(rid){_recipe=_recipe.filter(r=>r._id!==rid);const el=document.getElementById('rrow-'+rid);if(el)el.remove();}
+  function getRecipeData(){return _recipe.map(r=>({invId:document.getElementById('r-inv-'+r._id)?.value||'',qty:parseFloat(document.getElementById('r-qty-'+r._id)?.value)||0})).filter(r=>r.invId&&r.qty>0);}
+  function renderRecipe(recipe){_recipe=[];const el=$('recipe-rows');if(el)el.innerHTML='';(recipe||[]).forEach(r=>addRecipeRow(r.invId,r.qty));}
   function saveProduct(){
     const name=$('f-name').value.trim(),price=parseFloat($('f-price').value),cat=$('f-cat').value,emoji=$('f-emoji').value.trim()||'🍽️',editId=$('edit-id').value;
     if(!name){toast('El nombre es requerido','error');return;}if(isNaN(price)||price<0){toast('El precio debe ser 0 o mayor','error');return;}
+    const recipe=getRecipeData();
     const prods=getProds();
-    if(editId){const idx=prods.findIndex(p=>p.id===editId);if(idx>=0)prods[idx]={...prods[idx],name,price,cat,emoji};toast('✅ Producto actualizado');}
-    else{prods.push({id:uid(),name,price,cat,emoji,on:true});toast('✅ Producto agregado');}
+    if(editId){const idx=prods.findIndex(p=>p.id===editId);if(idx>=0)prods[idx]={...prods[idx],name,price,cat,emoji,recipe};toast('✅ Producto actualizado');}
+    else{prods.push({id:uid(),name,price,cat,emoji,on:true,recipe});toast('✅ Producto agregado');}
     writeProds(prods);cancelEdit();renderProdTable();renderProducts();
   }
-  function editProduct(id){const p=getProds().find(x=>x.id===id);if(!p)return;$('f-name').value=p.name;$('f-price').value=p.price;$('f-cat').value=p.cat;$('f-emoji').value=p.emoji||'';$('edit-id').value=p.id;$('prod-form-title').textContent='✏️ Editar Producto';$('save-prod-label').textContent='💾 Actualizar Producto';$('cancel-edit-btn').style.display='inline-flex';document.querySelector('.form-card').scrollIntoView({behavior:'smooth'});}
-  function cancelEdit(){['f-name','f-price','f-emoji','edit-id'].forEach(id=>$(id).value='');$('prod-form-title').textContent='➕ Agregar Nuevo Producto';$('save-prod-label').textContent='💾 Guardar Producto';$('cancel-edit-btn').style.display='none';}
+  function editProduct(id){const p=getProds().find(x=>x.id===id);if(!p)return;$('f-name').value=p.name;$('f-price').value=p.price;$('f-cat').value=p.cat;$('f-emoji').value=p.emoji||'';$('edit-id').value=p.id;renderRecipe(p.recipe);$('prod-form-title').textContent='✏️ Editar Producto';$('save-prod-label').textContent='💾 Actualizar Producto';$('cancel-edit-btn').style.display='inline-flex';document.querySelector('.form-card').scrollIntoView({behavior:'smooth'});}
+  function cancelEdit(){['f-name','f-price','f-emoji','edit-id'].forEach(id=>$(id).value='');renderRecipe([]);$('prod-form-title').textContent='➕ Agregar Nuevo Producto';$('save-prod-label').textContent='💾 Guardar Producto';$('cancel-edit-btn').style.display='none';}
   async function deleteProd(id){if(!await showConfirm('¿Eliminar este producto?'))return;writeProds(getProds().filter(p=>p.id!==id));renderProdTable();renderProducts();toast('Producto eliminado','error');}
   function toggleProd(id){const prods=getProds(),p=prods.find(x=>x.id===id);if(p)p.on=!(p.on!==false);writeProds(prods);renderProdTable();renderProducts();}
 

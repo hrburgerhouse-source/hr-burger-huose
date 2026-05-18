@@ -806,7 +806,7 @@ const App=(()=>{
     showScreen('screen-admin');
     const cfg=getCfg();
     if($('admin-biz-name'))$('admin-biz-name').textContent=cfg.name||'HR BURGER HOUSE';
-    if($('sales-date')){const d=new Date();$('sales-date').value=d.toISOString().slice(0,10);}
+    if($('sales-date'))$('sales-date').value=localDate();
     fillCatSelect();renderProdTable();renderCatsList();renderSales();loadCfg();
   }
   function logout(){if(clockTimer)clearInterval(clockTimer);cart=[];showScreen('screen-login');}
@@ -883,7 +883,7 @@ const App=(()=>{
   async function openMiHistorial(){
     $('modal-mi-historial').classList.add('show');
     $('historial-cajera-title').textContent=cajeraName||'—';
-    const today=new Date().toISOString().slice(0,10);
+    const today=localDate();
     const all=await getSales(today);
     const sales=all.filter(s=>s.cajera===cajeraName);
     const total=sales.reduce((s,x)=>s+x.total,0);
@@ -907,7 +907,7 @@ const App=(()=>{
     const cfg=getCfg();
     if($('corte-cajera'))$('corte-cajera').textContent=cajeraName||'—';
     if($('corte-fecha'))$('corte-fecha').textContent=new Date().toLocaleDateString('es-MX',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
-    const today=new Date().toISOString().slice(0,10);
+    const today=localDate();
     const sales=await getSales(today);
     const total=sales.reduce((s,x)=>s+x.total,0);
     const byPay={cash:0,card:0,transfer:0,personal:0},countPay={cash:0,card:0,transfer:0,personal:0};
@@ -929,7 +929,7 @@ const App=(()=>{
   async function printCorte(){
     if(!BTPrinter.isConnected()){toast('Conecta la impresora Bluetooth primero','error');return;}
     const cfg=getCfg();
-    const today=new Date().toISOString().slice(0,10);
+    const today=localDate();
     const sales=await getSales(today);
     const total=sales.reduce((s,x)=>s+x.total,0);
     const byPay={cash:0,card:0,transfer:0,personal:0},countPay={cash:0,card:0,transfer:0,personal:0};
@@ -1000,12 +1000,13 @@ const App=(()=>{
   function writeCfg(cfg){cache.settings=cfg;if(db)db.ref('settings').set(cfg);}
   function writeOrderN(n){cache.orderNumber=n;if(db)db.ref('orderNumber').set(n);}
   async function writeSale(sale){if(db)await db.ref('sales').push(sale);}
+  function localDate(d){d=d?new Date(d):new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
   async function getSales(dateFilter){
     if(!db)return[];
     const snap=await db.ref('sales').once('value');
     if(!snap.val())return[];
     let list=Object.values(snap.val()).sort((a,b)=>new Date(b.date)-new Date(a.date));
-    if(dateFilter)list=list.filter(s=>s.date&&s.date.slice(0,10)===dateFilter);
+    if(dateFilter)list=list.filter(s=>s.date&&localDate(s.date)===dateFilter);
     return list;
   }
 
@@ -1058,7 +1059,7 @@ const App=(()=>{
     const BOM='﻿';
     const rows=[['#Orden','Fecha','Hora','Cajera','Productos','Total','Pago','Recibido','Cambio'],...filtered.map(s=>[String(s.orderN).padStart(3,'0'),new Date(s.date).toLocaleDateString('es-MX'),new Date(s.date).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}),s.cajera||'',s.items?s.items.map(i=>i.qty+'x '+i.name).join(' | '):'',s.total.toFixed(2),s.pay==='cash'?'Efectivo':s.pay==='card'?'Tarjeta':'Transferencia',(s.received||0).toFixed(2),((s.received||0)-s.total).toFixed(2)])];
     const csv=BOM+rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
-    const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download='ventas-'+new Date().toISOString().slice(0,10)+'.csv';a.click();
+    const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download='ventas-'+localDate()+'.csv';a.click();
   }
 
   function writePromos(promos){cache.promos=promos;if(!db)return;if(!promos.length){db.ref('promos').remove();return;}const o={};promos.forEach(p=>o[p.id]=p);db.ref('promos').set(o);}

@@ -602,6 +602,7 @@ textarea.form-input{height:130px;resize:vertical;font-family:monospace;font-size
               <option value="kg">kg</option>
               <option value="piezas">piezas</option>
               <option value="litros">litros</option>
+              <option value="onzas">onzas</option>
               <option value="cajas">cajas</option>
               <option value="unidades">unidades</option>
             </select>
@@ -1200,6 +1201,7 @@ const App=(()=>{
             <option value="kg" ${item.unit==='kg'?'selected':''}>kg</option>
             <option value="piezas" ${item.unit==='piezas'?'selected':''}>piezas</option>
             <option value="litros" ${item.unit==='litros'?'selected':''}>litros</option>
+            <option value="onzas" ${item.unit==='onzas'?'selected':''}>onzas</option>
             <option value="cajas" ${item.unit==='cajas'?'selected':''}>cajas</option>
             <option value="unidades" ${item.unit==='unidades'?'selected':''}>unidades</option>
           </select>
@@ -1376,7 +1378,7 @@ const App=(()=>{
       {type:'center',text:'¡Listo para imprimir!'},
     ])).then(()=>toast('Prueba enviada'));
   }
-  return{init,saveFirebaseConfig,resetFirebase,loginCajera,confirmCajera,closeModalCajera,logout,showPin,closePin,pinKey,pinDel,pinEnter,setFilterCat,renderProducts,addToCart,changeQty,clearCart,openCheckout,closeCheckout,selPay,calcChange,calcDiscount,applyPromo,setDiscType,completeSale,openMiHistorial,closeMiHistorial,openCorte,closeCorte,printCorte,openPrinterModal,closePrinterModal,forceUpdate,goTab,saveProduct,editProduct,cancelEdit,deleteProd,toggleProd,renderProdTable,addCat,delCat,renderSales,reprint,clearSales,exportCSV,saveSettings,switchTab,savePromo,deletePromo,renderPromosList,btConnect,btDisconnect,btTest};
+  return{init,saveFirebaseConfig,resetFirebase,loginCajera,confirmCajera,closeModalCajera,logout,showPin,closePin,pinKey,pinDel,pinEnter,setFilterCat,renderProducts,addToCart,changeQty,clearCart,openCheckout,closeCheckout,selPay,calcChange,calcDiscount,applyPromo,setDiscType,completeSale,openMiHistorial,closeMiHistorial,openCorte,closeCorte,printCorte,openPrinterModal,closePrinterModal,forceUpdate,goTab,saveProduct,editProduct,cancelEdit,deleteProd,toggleProd,renderProdTable,addCat,delCat,renderSales,reprint,clearSales,exportCSV,saveSettings,switchTab,savePromo,deletePromo,renderPromosList,btConnect,btDisconnect,btTest,renderInventory,addInvItem,deleteInvItem,adjustStock,saveInvQty,startInvEdit,cancelInvEdit,saveInvEdit,openInvEmojiPicker,reloadInventory,loadInvLog,clearInvLog,sendTestEmail,sendStockAlert,addRecipeRow,removeRecipeRow,renderRecipe};
 })();
 document.addEventListener('DOMContentLoaded',()=>App.init());
 </script>

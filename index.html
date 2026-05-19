@@ -1395,7 +1395,7 @@ const App=(()=>{
       toast('Configura EmailJS en Ajustes primero','error');return;
     }
     const today=localDate();
-    const sales=getSales().filter(s=>localDate(s.date)===today);
+    const sales=await getSales(today);
     const totalVentas=sales.length;
     const totalIngresos=sales.reduce((a,s)=>a+s.total,0);
     const efectivo=sales.filter(s=>s.pay==='cash').reduce((a,s)=>a+s.total,0);

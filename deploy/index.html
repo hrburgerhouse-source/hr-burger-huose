@@ -445,7 +445,10 @@ textarea.form-input{height:130px;resize:vertical;font-family:monospace;font-size
   <div class="modal" style="max-width:580px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
       <div class="modal-title" style="margin-bottom:0">📜 Mi Historial — <span id="historial-cajera-title"></span></div>
-      <button class="btn btn-sm btn-outline" onclick="App.closeMiHistorial()">✕ Cerrar</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-sm btn-primary" onclick="App.sendDailyReport(true)">📧 Enviar reporte</button>
+        <button class="btn btn-sm btn-outline" onclick="App.closeMiHistorial()">✕ Cerrar</button>
+      </div>
     </div>
     <div style="display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap">
       <div style="background:var(--light);border-radius:10px;padding:10px 16px;text-align:center;flex:1">

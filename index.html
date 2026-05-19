@@ -1449,11 +1449,14 @@ ${p.detalle}
       toast('Configura EmailJS en Ajustes primero','error');return;
     }
     const p=await _buildReportParams();
+    const detalleHtml=p.detalle.split('\n').map(l=>`<div style="padding:2px 0">${l}</div>`).join('');
+    const params={...p,detalle:detalleHtml,to_email:cfg.ejsEmail};
     const now=new Date();
-    const params={...p,to_email:cfg.ejsEmail};
+    const today=p.fecha;
     try{
       if(typeof emailjs==='undefined'){alert('EmailJS no está cargado. Verifica tu conexión a internet.');return;}
       emailjs.init({publicKey:cfg.ejsPubKey});
+      console.log('Enviando reporte EmailJS con params:',params);
       const res=await emailjs.send(cfg.ejsService,cfg.ejsTemplate,params);
       if(!manual)localStorage.setItem('_ejsLastSent',today+'|'+now.getHours()+':'+String(now.getMinutes()).padStart(2,'0'));
       toast('📧 Reporte enviado correctamente');

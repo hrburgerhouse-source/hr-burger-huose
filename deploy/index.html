@@ -1456,7 +1456,6 @@ ${p.detalle}
     try{
       if(typeof emailjs==='undefined'){alert('EmailJS no está cargado. Verifica tu conexión a internet.');return;}
       emailjs.init({publicKey:cfg.ejsPubKey});
-      alert('DATOS A ENVIAR:\nFecha: '+params.fecha+'\nÓrdenes: '+params.total_ventas+'\nTotal: $'+params.total_ingresos+'\nService: '+cfg.ejsService+'\nTemplate: '+cfg.ejsTemplate);
       const res=await emailjs.send(cfg.ejsService,cfg.ejsTemplate,params);
       if(!manual)localStorage.setItem('_ejsLastSent',today+'|'+now.getHours()+':'+String(now.getMinutes()).padStart(2,'0'));
       toast('📧 Reporte enviado correctamente');

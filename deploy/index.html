@@ -634,6 +634,7 @@ textarea.form-input{height:130px;resize:vertical;font-family:monospace;font-size
       <div class="filter-bar">
         <div class="filter-left"><span class="filter-label">Fecha:</span><input type="date" class="form-input" id="sales-date" style="width:auto" onchange="App.renderSales()"></div>
         <div style="display:flex;gap:8px">
+          <button class="btn btn-outline btn-sm" onclick="App.previewReport()">📧 Ver Reporte</button>
           <button class="btn btn-outline btn-sm" onclick="App.exportCSV()">📥 Exportar CSV</button>
           <button class="btn btn-danger btn-sm" onclick="App.clearSales()">🗑️ Limpiar</button>
         </div>
@@ -711,6 +712,16 @@ textarea.form-input{height:130px;resize:vertical;font-family:monospace;font-size
 <!-- TICKET PRINT -->
 <div id="ticket-print"></div>
 <!-- CONFIRM MODAL -->
+<div id="modal-report-preview" class="modal-overlay">
+  <div class="modal" style="max-width:480px;max-height:85vh;display:flex;flex-direction:column">
+    <div class="modal-title">📧 Vista previa del reporte</div>
+    <div id="report-preview-body" style="flex:1;overflow-y:auto;font-family:monospace;font-size:.82rem;white-space:pre-wrap;background:#f8f9fa;border-radius:8px;padding:14px;margin:12px 0;line-height:1.6"></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="document.getElementById('modal-report-preview').classList.remove('show')">Cerrar</button>
+      <button class="btn btn-primary" onclick="App.sendDailyReport(true)">📤 Enviar ahora</button>
+    </div>
+  </div>
+</div>
 <div id="modal-confirm" class="modal-overlay">
   <div class="modal" style="max-width:340px;text-align:center">
     <div style="font-size:2.5rem;margin-bottom:12px">⚠️</div>
@@ -1390,21 +1401,56 @@ const App=(()=>{
     if('serviceWorker' in navigator)navigator.serviceWorker.getRegistrations().then(regs=>regs.forEach(r=>r.unregister()));
     window.location.reload(true);
   }
-  async function sendDailyReport(manual=false){
-    const cfg=getCfg();
-    if(!cfg.ejsPubKey||!cfg.ejsService||!cfg.ejsTemplate||!cfg.ejsEmail){
-      toast('Configura EmailJS en Ajustes primero','error');return;
-    }
-    const today=localDate();
+  async function _buildReportParams(dateFilter){
+    const today=dateFilter||localDate();
     const sales=await getSales(today);
     const totalVentas=sales.length;
     const totalIngresos=sales.reduce((a,s)=>a+s.total,0);
     const efectivo=sales.filter(s=>s.pay==='cash').reduce((a,s)=>a+s.total,0);
     const tarjeta=sales.filter(s=>s.pay==='card').reduce((a,s)=>a+s.total,0);
+    const transferencia=sales.filter(s=>s.pay==='transfer').reduce((a,s)=>a+s.total,0);
     const personal=sales.filter(s=>s.pay==='personal').reduce((a,s)=>a+s.total,0);
-    const detalle=sales.length?sales.map((s,i)=>'#'+(i+1)+' '+new Date(s.date).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})+' — $'+s.total.toFixed(2)+' ('+({cash:'Efectivo',card:'Tarjeta',transfer:'Transferencia',personal:'Comida de Empleado'}[s.pay]||s.pay)+')').join('\n'):'Sin ventas registradas hoy.';
+    const payLabel={cash:'Efectivo',card:'Tarjeta',transfer:'Transferencia',personal:'Comida de Empleado'};
+    const detalle=sales.length?sales.map((s,i)=>'#'+(i+1)+' '+new Date(s.date).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})+' — $'+s.total.toFixed(2)+' ('+( payLabel[s.pay]||s.pay)+')').join('\n'):'Sin ventas registradas hoy.';
     const now=new Date();
-    const params={fecha:today,hora:now.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}),total_ventas:totalVentas,total_ingresos:totalIngresos.toFixed(2),efectivo:efectivo.toFixed(2),tarjeta:tarjeta.toFixed(2),personal:personal.toFixed(2),detalle,to_email:cfg.ejsEmail};
+    return{fecha:today,hora:now.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}),total_ventas:totalVentas,total_ingresos:totalIngresos.toFixed(2),efectivo:efectivo.toFixed(2),tarjeta:tarjeta.toFixed(2),transferencia:transferencia.toFixed(2),personal:personal.toFixed(2),detalle};
+  }
+  async function previewReport(){
+    const dateEl=document.getElementById('sales-date');
+    const dateFilter=dateEl&&dateEl.value?dateEl.value:localDate();
+    const p=await _buildReportParams(dateFilter);
+    const text=
+`📊 REPORTE DE VENTAS — ${p.fecha}
+Generado a las ${p.hora}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+RESUMEN DEL DÍA
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+Total de órdenes:    ${p.total_ventas}
+Total ingresos:     $${p.total_ingresos}
+
+💵 Efectivo:        $${p.efectivo}
+💳 Tarjeta:         $${p.tarjeta}
+📲 Transferencia:   $${p.transferencia}
+👨‍🍳 Comida Empleado: $${p.personal}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+DETALLE DE VENTAS
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+${p.detalle}
+
+— HR Burger House`;
+    document.getElementById('report-preview-body').textContent=text;
+    document.getElementById('modal-report-preview').classList.add('show');
+  }
+  async function sendDailyReport(manual=false){
+    const cfg=getCfg();
+    if(!cfg.ejsPubKey||!cfg.ejsService||!cfg.ejsTemplate||!cfg.ejsEmail){
+      toast('Configura EmailJS en Ajustes primero','error');return;
+    }
+    const p=await _buildReportParams();
+    const now=new Date();
+    const params={...p,to_email:cfg.ejsEmail};
     try{
       if(typeof emailjs==='undefined'){alert('EmailJS no está cargado. Verifica tu conexión a internet.');return;}
       emailjs.init({publicKey:cfg.ejsPubKey});
@@ -1453,7 +1499,7 @@ const App=(()=>{
       {type:'center',text:'¡Listo para imprimir!'},
     ])).then(()=>toast('Prueba enviada'));
   }
-  return{init,saveFirebaseConfig,resetFirebase,loginCajera,confirmCajera,closeModalCajera,logout,showPin,closePin,pinKey,pinDel,pinEnter,setFilterCat,renderProducts,addToCart,changeQty,clearCart,openCheckout,closeCheckout,selPay,calcChange,calcDiscount,applyPromo,setDiscType,completeSale,openMiHistorial,closeMiHistorial,openCorte,closeCorte,printCorte,openPrinterModal,closePrinterModal,forceUpdate,goTab,saveProduct,editProduct,cancelEdit,deleteProd,toggleProd,renderProdTable,addCat,delCat,renderSales,reprint,clearSales,exportCSV,saveSettings,switchTab,savePromo,deletePromo,renderPromosList,btConnect,btDisconnect,btTest,renderInventory,addInvItem,deleteInvItem,adjustStock,saveInvQty,startInvEdit,cancelInvEdit,saveInvEdit,openInvEmojiPicker,reloadInventory,loadInvLog,clearInvLog,sendTestEmail,sendStockAlert,addRecipeRow,removeRecipeRow,renderRecipe,sendDailyReport};
+  return{init,saveFirebaseConfig,resetFirebase,loginCajera,confirmCajera,closeModalCajera,logout,showPin,closePin,pinKey,pinDel,pinEnter,setFilterCat,renderProducts,addToCart,changeQty,clearCart,openCheckout,closeCheckout,selPay,calcChange,calcDiscount,applyPromo,setDiscType,completeSale,openMiHistorial,closeMiHistorial,openCorte,closeCorte,printCorte,openPrinterModal,closePrinterModal,forceUpdate,goTab,saveProduct,editProduct,cancelEdit,deleteProd,toggleProd,renderProdTable,addCat,delCat,renderSales,reprint,clearSales,exportCSV,saveSettings,switchTab,savePromo,deletePromo,renderPromosList,btConnect,btDisconnect,btTest,renderInventory,addInvItem,deleteInvItem,adjustStock,saveInvQty,startInvEdit,cancelInvEdit,saveInvEdit,openInvEmojiPicker,reloadInventory,loadInvLog,clearInvLog,sendTestEmail,sendStockAlert,addRecipeRow,removeRecipeRow,renderRecipe,sendDailyReport,previewReport};
 })();
 document.addEventListener('DOMContentLoaded',()=>App.init());
 </script>

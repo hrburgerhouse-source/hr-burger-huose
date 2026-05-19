@@ -1405,12 +1405,16 @@ const App=(()=>{
     const now=new Date();
     const params={fecha:today,hora:now.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}),total_ventas:totalVentas,total_ingresos:totalIngresos.toFixed(2),efectivo:efectivo.toFixed(2),tarjeta:tarjeta.toFixed(2),personal:personal.toFixed(2),detalle,to_email:cfg.ejsEmail};
     try{
-      emailjs.init(cfg.ejsPubKey);
-      await emailjs.send(cfg.ejsService,cfg.ejsTemplate,params);
+      if(typeof emailjs==='undefined'){alert('EmailJS no está cargado. Verifica tu conexión a internet.');return;}
+      emailjs.init({publicKey:cfg.ejsPubKey});
+      const res=await emailjs.send(cfg.ejsService,cfg.ejsTemplate,params);
       if(!manual)localStorage.setItem('_ejsLastSent',today+'|'+now.getHours()+':'+String(now.getMinutes()).padStart(2,'0'));
       toast('📧 Reporte enviado correctamente');
+      console.log('EmailJS OK',res);
     }catch(e){
-      toast('Error al enviar: '+(e.text||e.message||JSON.stringify(e)),'error');
+      const msg=e.text||e.message||JSON.stringify(e);
+      alert('Error EmailJS: '+msg);
+      console.error('EmailJS error',e);
     }
   }
   function _startReportScheduler(){

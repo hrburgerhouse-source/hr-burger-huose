@@ -1402,7 +1402,7 @@ const App=(()=>{
     const efectivo=sales.filter(s=>s.pay==='cash').reduce((a,s)=>a+s.total,0);
     const tarjeta=sales.filter(s=>s.pay==='card').reduce((a,s)=>a+s.total,0);
     const personal=sales.filter(s=>s.pay==='personal').reduce((a,s)=>a+s.total,0);
-    const detalle=sales.length?sales.map((s,i)=>'#'+(i+1)+' '+new Date(s.date).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})+' — $'+s.total.toFixed(2)+' ('+({cash:'Efectivo',card:'Tarjeta',personal:'Personal'}[s.pay]||s.pay)+')').join('\n'):'Sin ventas registradas hoy.';
+    const detalle=sales.length?sales.map((s,i)=>'#'+(i+1)+' '+new Date(s.date).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})+' — $'+s.total.toFixed(2)+' ('+({cash:'Efectivo',card:'Tarjeta',transfer:'Transferencia',personal:'Comida de Empleado'}[s.pay]||s.pay)+')').join('\n'):'Sin ventas registradas hoy.';
     const now=new Date();
     const params={fecha:today,hora:now.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}),total_ventas:totalVentas,total_ingresos:totalIngresos.toFixed(2),efectivo:efectivo.toFixed(2),tarjeta:tarjeta.toFixed(2),personal:personal.toFixed(2),detalle,to_email:cfg.ejsEmail};
     try{

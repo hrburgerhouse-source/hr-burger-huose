@@ -12,7 +12,7 @@ function doPost(e) {
     if (sheet.getLastRow() === 0) {
       const headers = [
         '#Orden','Fecha','Hora','Cajera',
-        'Productos','Subtotal ($)','Descuento ($)','Total ($)','Método de Pago','Recibido ($)','Cambio ($)'
+        'Productos','Subtotal ($)','Descuento ($)','Total ($)','Método de Pago','Recibido ($)','Cambio ($)','Comisión Para','Comisión ($)'
       ];
       sheet.appendRow(headers);
       sheet.getRange(1, 1, 1, headers.length)
@@ -34,11 +34,13 @@ function doPost(e) {
       parseFloat(data.total),
       data.pago,
       parseFloat(data.recibido),
-      parseFloat(data.cambio)
+      parseFloat(data.cambio),
+      data.comisionEmp || '',
+      parseFloat(data.comision) || 0
     ]);
 
     // Ajustar columnas al contenido
-    sheet.autoResizeColumns(1, 11);
+    sheet.autoResizeColumns(1, 13);
 
     return ContentService
       .createTextOutput(JSON.stringify({ status: 'ok' }))

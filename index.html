@@ -459,10 +459,14 @@ textarea.form-input{height:130px;resize:vertical;font-family:monospace;font-size
         <div style="font-size:.75rem;color:#999;margin-bottom:2px">Total del turno</div>
         <div style="font-weight:900;font-size:1.2rem;color:var(--primary)" id="hist-total">$0.00</div>
       </div>
+      <div style="background:#fffbf0;border:1px solid #f0c060;border-radius:10px;padding:10px 16px;text-align:center;flex:1">
+        <div style="font-size:.75rem;color:#b8860b;margin-bottom:2px">Mis comisiones</div>
+        <div style="font-weight:900;font-size:1.2rem;color:#b8860b" id="hist-comm">$0.00</div>
+      </div>
     </div>
     <div style="overflow-x:auto;max-height:55vh;overflow-y:auto">
       <table class="sales-table" style="width:100%">
-        <thead><tr><th>#</th><th>Hora</th><th>Productos</th><th>Pago</th><th>Total</th><th></th></tr></thead>
+        <thead><tr><th>#</th><th>Hora</th><th>Productos</th><th>Pago</th><th>Total</th><th>Comisión</th><th></th></tr></thead>
         <tbody id="historial-tbody"></tbody>
       </table>
     </div>
@@ -485,6 +489,10 @@ textarea.form-input{height:130px;resize:vertical;font-family:monospace;font-size
       <div class="corte-pay-card personal"><div class="corte-pay-icon">👨‍🍳</div><div class="corte-pay-method">Personal</div><div class="corte-pay-amount" id="corte-personal">$0.00</div><div class="corte-pay-count" id="corte-personal-c">0 consumos</div></div>
     </div>
     <div class="corte-grand-total"><span class="corte-grand-label">💰 TOTAL DEL DÍA</span><span class="corte-grand-amount" id="corte-total">$0.00</span></div>
+    <div id="corte-comisiones-section" style="display:none;margin:0 0 8px;background:#fffbf0;border:1px solid #f0c060;border-radius:10px;padding:10px 14px">
+      <div style="font-size:.78rem;color:#b8860b;font-weight:700;margin-bottom:6px">💰 COMISIONES DEL DÍA</div>
+      <div id="corte-comisiones-body"></div>
+    </div>
     <div class="corte-sales-list" id="corte-sales-list"></div>
     <div class="corte-actions">
       <button class="btn btn-corte-print" onclick="App.printCorte()">🖨️ Imprimir Corte</button>
@@ -526,6 +534,10 @@ textarea.form-input{height:130px;resize:vertical;font-family:monospace;font-size
               <div class="emoji-grid" id="emoji-grid"></div>
             </div>
           </div>
+        </div>
+        <div class="form-row form-gap">
+          <div class="form-group"><label class="form-label">Tipo de comisión</label><select class="form-select" id="f-comm-type"><option value="pct">% Porcentaje</option><option value="fix">$ Monto fijo</option></select></div>
+          <div class="form-group"><label class="form-label">Comisión (0 = sin comisión)</label><input type="number" class="form-input" id="f-comm-val" placeholder="0" step=".50" min="0" value="0"></div>
         </div>
         <div class="form-group" style="margin-top:4px">
           <label class="form-label">📦 Descontar del inventario (por unidad vendida)</label>
@@ -1002,7 +1014,9 @@ const App=(()=>{
     const subtotal=cartTotal(),disc=discountAmount(),total=cartTotalFinal(),rec=payMethod==='cash'?(parseFloat(document.getElementById('cash-received').value)||0):total;
     if(payMethod==='cash'&&rec<total){toast('Monto insuficiente','error');return;}
     const cfg=getCfg(),orderN=getOrderN();
-    const sale={id:uid(),orderN,date:new Date().toISOString(),items:cart.map(i=>({...i})),subtotal,discount:disc,discountType,discountVal,total,pay:payMethod,received:rec,cajera:cajeraName};
+    const saleItems=cart.map(i=>{const prod=getProds().find(p=>p.id===i.id);const cType=prod?.commissionType||'pct';const cVal=parseFloat(prod?.commissionVal)||0;const commissionAmt=cType==='pct'?parseFloat((i.price*i.qty*cVal/100).toFixed(2)):parseFloat((cVal*i.qty).toFixed(2));return{...i,commissionAmt};});
+    const totalCommission=parseFloat(saleItems.reduce((s,i)=>s+i.commissionAmt,0).toFixed(2));
+    const sale={id:uid(),orderN,date:new Date().toISOString(),items:saleItems,subtotal,discount:disc,discountType,discountVal,total,pay:payMethod,received:rec,cajera:cajeraName,totalCommission};
     await writeSale(sale);writeOrderN(orderN+1);
     const change=payMethod==='cash'?rec-total:0;
     printTicket(sale,change,cfg);
@@ -1021,7 +1035,7 @@ const App=(()=>{
       });
     });
     if(invChanged)writeInventory(invItems);
-    const gasUrl=GAS_URL();if(gasUrl){try{fetch(gasUrl,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},body:JSON.stringify({orden:String(orderN).padStart(3,'0'),fecha:new Date().toLocaleDateString('es-MX'),hora:new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}),cajera:cajeraName,productos:sale.items.map(i=>i.qty+'x '+i.name).join(' | '),subtotal:subtotal.toFixed(2),descuento:disc.toFixed(2),total:total.toFixed(2),pago:payMethod==='cash'?'Efectivo':payMethod==='card'?'Tarjeta':'Transferencia',recibido:rec.toFixed(2),cambio:change.toFixed(2)})});}catch(e){}}
+    const gasUrl=GAS_URL();if(gasUrl){try{fetch(gasUrl,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},body:JSON.stringify({orden:String(orderN).padStart(3,'0'),fecha:new Date().toLocaleDateString('es-MX'),hora:new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}),cajera:cajeraName,productos:sale.items.map(i=>i.qty+'x '+i.name).join(' | '),subtotal:subtotal.toFixed(2),descuento:disc.toFixed(2),total:total.toFixed(2),pago:payMethod==='cash'?'Efectivo':payMethod==='card'?'Tarjeta':'Transferencia',recibido:rec.toFixed(2),cambio:change.toFixed(2),comision:totalCommission.toFixed(2)})});}catch(e){}}
   }
 
   async function openMiHistorial(){
@@ -1031,17 +1045,20 @@ const App=(()=>{
     const all=await getSales(today);
     const sales=all.filter(s=>s.cajera===cajeraName);
     const total=sales.reduce((s,x)=>s+x.total,0);
+    const totalComm=sales.reduce((s,x)=>s+(x.totalCommission||0),0);
     $('hist-count').textContent=sales.length;
     $('hist-total').textContent=fmt(total);
+    $('hist-comm').textContent=fmt(totalComm);
     const payLabel={cash:'💵 Efectivo',card:'💳 Tarjeta',transfer:'📲 Transfer.',personal:'👨‍🍳 Personal'};
     const tbody=$('historial-tbody');
-    if(!sales.length){tbody.innerHTML='<tr><td colspan="6" class="empty-table">Sin ventas en este turno</td></tr>';return;}
+    if(!sales.length){tbody.innerHTML='<tr><td colspan="7" class="empty-table">Sin ventas en este turno</td></tr>';return;}
     tbody.innerHTML=sales.map(s=>`<tr>
       <td class="order-num">#${String(s.orderN).padStart(3,'0')}</td>
       <td>${new Date(s.date).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})}</td>
       <td class="sale-products" style="font-size:.78rem">${s.items?s.items.map(i=>i.qty+'x '+i.name).join(', '):''}</td>
       <td><span style="font-size:.78rem">${payLabel[s.pay]||s.pay}</span></td>
       <td class="sale-total-cell">${fmt(s.total)}</td>
+      <td style="color:#b8860b;font-weight:700;font-size:.85rem">${s.totalCommission?fmt(s.totalCommission):'—'}</td>
       <td><button class="btn btn-sm btn-outline" onclick="App.reprint('${s.id}')">🖨️</button></td>
     </tr>`).join('');
   }
@@ -1065,6 +1082,18 @@ const App=(()=>{
     if($('corte-card'))$('corte-card').textContent=fmt(byPay.card);if($('corte-card-c'))$('corte-card-c').textContent=countPay.card+' ventas';
     if($('corte-transfer'))$('corte-transfer').textContent=fmt(byPay.transfer);if($('corte-transfer-c'))$('corte-transfer-c').textContent=countPay.transfer+' ventas';
     if($('corte-personal'))$('corte-personal').textContent=countPay.personal+' ord.';if($('corte-personal-c'))$('corte-personal-c').textContent=countPay.personal+' consumos';
+    const commByEmp={};
+    sales.forEach(s=>{if(s.totalCommission>0){const emp=s.cajera||'—';commByEmp[emp]=(commByEmp[emp]||0)+s.totalCommission;}});
+    const commEntries=Object.entries(commByEmp);
+    const csec=$('corte-comisiones-section');
+    const cbody=$('corte-comisiones-body');
+    if(csec&&cbody){
+      if(commEntries.length){
+        csec.style.display='block';
+        const totalComm=commEntries.reduce((s,[,v])=>s+v,0);
+        cbody.innerHTML=commEntries.map(([emp,amt])=>`<div style="display:flex;justify-content:space-between;font-size:.85rem;padding:2px 0"><span>${emp}</span><span style="font-weight:700">${fmt(amt)}</span></div>`).join('')+(commEntries.length>1?`<div style="display:flex;justify-content:space-between;font-size:.85rem;padding:4px 0 0;border-top:1px solid #f0c060;margin-top:4px"><span style="font-weight:700">Total</span><span style="font-weight:700">${fmt(totalComm)}</span></div>`:'');
+      }else{csec.style.display='none';}
+    }
     const sl=$('corte-sales-list');
     const payIcon={cash:'💵',card:'💳',transfer:'📲',personal:'👨‍🍳'};
     if(sl)sl.innerHTML=sales.length?sales.map(s=>`<div class="corte-sale-row"><span class="corte-sale-num">#${String(s.orderN).padStart(3,'0')}</span><span class="corte-sale-time">${new Date(s.date).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})}</span><span class="corte-sale-pay">${payIcon[s.pay]||'💵'}</span><span class="corte-sale-total">${s.pay==='personal'?'—':fmt(s.total)}</span></div>`).join(''):'<div class="empty-table">Sin ventas hoy</div>';
@@ -1185,13 +1214,15 @@ const App=(()=>{
     const name=$('f-name').value.trim(),price=parseFloat($('f-price').value),cat=$('f-cat').value,emoji=$('f-emoji').value.trim()||'🍽️',editId=$('edit-id').value;
     if(!name){toast('El nombre es requerido','error');return;}if(isNaN(price)||price<0){toast('El precio debe ser 0 o mayor','error');return;}
     const recipe=getRecipeData();
+    const commissionType=$('f-comm-type').value||'pct';
+    const commissionVal=parseFloat($('f-comm-val').value)||0;
     const prods=getProds();
-    if(editId){const idx=prods.findIndex(p=>p.id===editId);if(idx>=0)prods[idx]={...prods[idx],name,price,cat,emoji,recipe};toast('✅ Producto actualizado');}
-    else{prods.push({id:uid(),name,price,cat,emoji,on:true,recipe});toast('✅ Producto agregado');}
+    if(editId){const idx=prods.findIndex(p=>p.id===editId);if(idx>=0)prods[idx]={...prods[idx],name,price,cat,emoji,recipe,commissionType,commissionVal};toast('✅ Producto actualizado');}
+    else{prods.push({id:uid(),name,price,cat,emoji,on:true,recipe,commissionType,commissionVal});toast('✅ Producto agregado');}
     writeProds(prods);cancelEdit();renderProdTable();renderProducts();
   }
-  function editProduct(id){const p=getProds().find(x=>x.id===id);if(!p)return;$('f-name').value=p.name;$('f-price').value=p.price;$('f-cat').value=p.cat;$('f-emoji').value=p.emoji||'';$('edit-id').value=p.id;renderRecipe(p.recipe);$('prod-form-title').textContent='✏️ Editar Producto';$('save-prod-label').textContent='💾 Actualizar Producto';$('cancel-edit-btn').style.display='inline-flex';document.querySelector('.form-card').scrollIntoView({behavior:'smooth'});}
-  function cancelEdit(){['f-name','f-price','f-emoji','edit-id'].forEach(id=>$(id).value='');renderRecipe([]);$('prod-form-title').textContent='➕ Agregar Nuevo Producto';$('save-prod-label').textContent='💾 Guardar Producto';$('cancel-edit-btn').style.display='none';}
+  function editProduct(id){const p=getProds().find(x=>x.id===id);if(!p)return;$('f-name').value=p.name;$('f-price').value=p.price;$('f-cat').value=p.cat;$('f-emoji').value=p.emoji||'';$('edit-id').value=p.id;renderRecipe(p.recipe);$('f-comm-type').value=p.commissionType||'pct';$('f-comm-val').value=p.commissionVal||0;$('prod-form-title').textContent='✏️ Editar Producto';$('save-prod-label').textContent='💾 Actualizar Producto';$('cancel-edit-btn').style.display='inline-flex';document.querySelector('.form-card').scrollIntoView({behavior:'smooth'});}
+  function cancelEdit(){['f-name','f-price','f-emoji','edit-id'].forEach(id=>$(id).value='');renderRecipe([]);$('f-comm-type').value='pct';$('f-comm-val').value='0';$('prod-form-title').textContent='➕ Agregar Nuevo Producto';$('save-prod-label').textContent='💾 Guardar Producto';$('cancel-edit-btn').style.display='none';}
   async function deleteProd(id){if(!await showConfirm('¿Eliminar este producto?'))return;writeProds(getProds().filter(p=>p.id!==id));renderProdTable();renderProducts();toast('Producto eliminado','error');}
   function toggleProd(id){const prods=getProds(),p=prods.find(x=>x.id===id);if(p)p.on=!(p.on!==false);writeProds(prods);renderProdTable();renderProducts();}
 
@@ -1217,7 +1248,7 @@ const App=(()=>{
     const filtered=await getSales(dateVal?dateVal.value:null);
     if(!filtered.length){toast('Sin ventas para exportar','error');return;}
     const BOM='﻿';
-    const rows=[['#Orden','Fecha','Hora','Cajera','Productos','Total','Pago','Recibido','Cambio'],...filtered.map(s=>[String(s.orderN).padStart(3,'0'),new Date(s.date).toLocaleDateString('es-MX'),new Date(s.date).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}),s.cajera||'',s.items?s.items.map(i=>i.qty+'x '+i.name).join(' | '):'',s.total.toFixed(2),s.pay==='cash'?'Efectivo':s.pay==='card'?'Tarjeta':'Transferencia',(s.received||0).toFixed(2),((s.received||0)-s.total).toFixed(2)])];
+    const rows=[['#Orden','Fecha','Hora','Cajera','Productos','Total','Pago','Recibido','Cambio','Comisión'],...filtered.map(s=>[String(s.orderN).padStart(3,'0'),new Date(s.date).toLocaleDateString('es-MX'),new Date(s.date).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}),s.cajera||'',s.items?s.items.map(i=>i.qty+'x '+i.name).join(' | '):'',s.total.toFixed(2),s.pay==='cash'?'Efectivo':s.pay==='card'?'Tarjeta':'Transferencia',(s.received||0).toFixed(2),((s.received||0)-s.total).toFixed(2),(s.totalCommission||0).toFixed(2)])];
     const csv=BOM+rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
     const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download='ventas-'+localDate()+'.csv';a.click();
   }
@@ -1417,7 +1448,11 @@ const App=(()=>{
     const payLabel={cash:'Efectivo',card:'Tarjeta',transfer:'Transferencia',personal:'Comida de Empleado'};
     const detalle=sales.length?sales.map((s,i)=>'#'+(i+1)+' '+new Date(s.date).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})+' — $'+s.total.toFixed(2)+' ('+( payLabel[s.pay]||s.pay)+')').join('\n'):'Sin ventas registradas hoy.';
     const now=new Date();
-    return{fecha:today,hora:now.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}),total_ventas:totalVentas,total_ingresos:totalIngresos.toFixed(2),efectivo:efectivo.toFixed(2),tarjeta:tarjeta.toFixed(2),transferencia:transferencia.toFixed(2),personal:personal.toFixed(2),detalle};
+    const commByEmpRpt={};
+    sales.forEach(s=>{if(s.totalCommission>0){const emp=s.cajera||'—';commByEmpRpt[emp]=(commByEmpRpt[emp]||0)+s.totalCommission;}});
+    const totalComisiones=Object.values(commByEmpRpt).reduce((a,b)=>a+b,0);
+    const detalleComisiones=Object.entries(commByEmpRpt).length?Object.entries(commByEmpRpt).map(([emp,amt])=>emp+': $'+amt.toFixed(2)).join('\n'):'Sin comisiones registradas.';
+    return{fecha:today,hora:now.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}),total_ventas:totalVentas,total_ingresos:totalIngresos.toFixed(2),efectivo:efectivo.toFixed(2),tarjeta:tarjeta.toFixed(2),transferencia:transferencia.toFixed(2),personal:personal.toFixed(2),detalle,total_comisiones:totalComisiones.toFixed(2),detalle_comisiones:detalleComisiones};
   }
   async function previewReport(){
     const dateEl=document.getElementById('sales-date');
@@ -1437,6 +1472,12 @@ Total ingresos:     $${p.total_ingresos}
 💳 Tarjeta:         $${p.tarjeta}
 📲 Transferencia:   $${p.transferencia}
 👨‍🍳 Comida Empleado: $${p.personal}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+COMISIONES DEL DÍA
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+💰 Total comisiones: $${p.total_comisiones}
+${p.detalle_comisiones}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 DETALLE DE VENTAS

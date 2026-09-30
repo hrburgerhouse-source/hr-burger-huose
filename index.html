@@ -540,10 +540,6 @@ textarea.form-input{height:130px;resize:vertical;font-family:monospace;font-size
             </div>
           </div>
         </div>
-        <div class="form-row form-gap">
-          <div class="form-group"><label class="form-label">Tipo de comisión</label><select class="form-select" id="f-comm-type"><option value="pct">% Porcentaje</option><option value="fix">$ Monto fijo</option></select></div>
-          <div class="form-group"><label class="form-label">Comisión (0 = sin comisión)</label><input type="number" class="form-input" id="f-comm-val" placeholder="0" step=".50" min="0" value="0"></div>
-        </div>
         <div class="form-group" style="margin-top:4px">
           <label class="form-label">📦 Descontar del inventario (por unidad vendida)</label>
           <div id="recipe-rows" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px"></div>
@@ -674,7 +670,18 @@ textarea.form-input{height:130px;resize:vertical;font-family:monospace;font-size
         <div class="form-group"><label class="form-label">Mensaje en Ticket</label><input type="text" class="form-input" id="cfg-msg" placeholder="¡Gracias por su preferencia!"></div>
         <div class="form-group"><label class="form-label">PIN de Admin (4 dígitos)</label><input type="password" class="form-input" id="cfg-pin" placeholder="1234" maxlength="4"></div>
         <div class="form-group"><label class="form-label">Descuento empleado — Comida de Personal (%)</label><input type="number" class="form-input" id="cfg-personal-disc" placeholder="Ej: 50" min="0" max="100" step="1" style="max-width:160px"></div>
-        <div class="form-group"><label class="form-label">Empleados (uno por línea)</label><textarea class="form-input" id="cfg-empleados" rows="4" placeholder="María&#10;Juan&#10;Ana" style="resize:vertical;font-family:inherit"></textarea></div>
+        <div class="form-group">
+          <label class="form-label">👥 Empleados y comisiones</label>
+          <div id="empleados-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px"></div>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <input type="text" class="form-input" id="new-emp-name" placeholder="Nombre" style="flex:1;min-width:120px">
+            <div style="display:flex;align-items:center;gap:4px">
+              <input type="number" class="form-input" id="new-emp-pct" placeholder="0" min="0" max="100" step="0.5" style="width:70px">
+              <span style="font-size:.85rem;color:#666">%</span>
+            </div>
+            <button type="button" class="btn btn-outline btn-sm" onclick="App.addEmpleado()">+ Agregar</button>
+          </div>
+        </div>
         <div class="form-group"><label class="form-label">Correo para alertas de inventario</label>
           <div style="display:flex;gap:8px;align-items:center">
             <input type="email" class="form-input" id="cfg-alert-email" placeholder="correo@ejemplo.com" style="flex:1">
@@ -1004,28 +1011,33 @@ const App=(()=>{
   }
 
   function openCheckout(){if(!cart.length)return;discountType='pct';discountVal=0;commEmpSelected='';const dv=document.getElementById('disc-val');if(dv)dv.value='';const dl=document.getElementById('disc-line');if(dl)dl.style.display='none';fillPromoSelect();fillCommEmpSelect();setDiscType('pct');const total=cartTotal();$('checkout-total').textContent=fmt(total);$('checkout-items').innerHTML=cart.map(i=>`<div class="checkout-line"><span>${i.qty}× ${i.name}</span><span>${fmt(i.price*i.qty)}</span></div>`).join('');$('cash-received').value='';$('change-box').className='change-box';const cp=$('comm-preview-line');if(cp)cp.style.display='none';selPay('cash');$('modal-checkout').classList.add('show');}
-  function fillCommEmpSelect(){const sel=$('comm-emp-sel');if(!sel)return;const emps=(getCfg().empleados||[]);sel.innerHTML='<option value="">Sin comisión</option>'+emps.map(e=>`<option value="${e}">${e}</option>`).join('');}
-  function calcCommissionForCart(){return cart.reduce((sum,i)=>{const prod=getProds().find(p=>p.id===i.id);const cType=prod?.commissionType||'pct';const cVal=parseFloat(prod?.commissionVal)||0;const amt=cType==='pct'?i.price*i.qty*cVal/100:cVal*i.qty;return sum+amt;},0);}
-  function onCommEmpChange(){const sel=$('comm-emp-sel');commEmpSelected=sel?sel.value:'';const cp=$('comm-preview-line');if(!cp)return;if(commEmpSelected){const total=calcCommissionForCart();cp.style.display='block';cp.textContent='Comisión para '+commEmpSelected+': '+fmt(total);}else{cp.style.display='none';}}
+  function fillCommEmpSelect(){const sel=$('comm-emp-sel');if(!sel)return;const emps=(getCfg().empleados||[]).map(e=>typeof e==='string'?{name:e,pct:0}:e);sel.innerHTML='<option value="">Sin comisión</option>'+emps.map(e=>`<option value="${e.name}">${e.name} (${e.pct||0}%)</option>`).join('');}
+  function calcCommissionForCart(){if(!commEmpSelected||payMethod==='personal')return 0;const emps=(getCfg().empleados||[]).map(e=>typeof e==='string'?{name:e,pct:0}:e);const emp=emps.find(e=>e.name===commEmpSelected);const pct=parseFloat(emp?.pct)||0;return parseFloat((cartTotalFinal()*pct/100).toFixed(2));}
+  function refreshCommPreview(){const cp=$('comm-preview-line');if(!cp)return;if(commEmpSelected&&payMethod!=='personal'){const emps=(getCfg().empleados||[]).map(e=>typeof e==='string'?{name:e,pct:0}:e);const emp=emps.find(e=>e.name===commEmpSelected);const pct=parseFloat(emp?.pct)||0;const amt=calcCommissionForCart();cp.style.display='block';cp.textContent='Comisión para '+commEmpSelected+' ('+pct+'%): '+fmt(amt);}else{cp.style.display='none';}}
+  function onCommEmpChange(){const sel=$('comm-emp-sel');commEmpSelected=sel?sel.value:'';refreshCommPreview();}
   function getPromos(){return cache.promos||[];}
   function discountAmount(){const sub=cartTotal();return discountType==='pct'?Math.min(sub,sub*discountVal/100):Math.min(sub,discountVal||0);}
   function cartTotalFinal(){return Math.max(0,cartTotal()-discountAmount());}
-  function updateCheckoutTotal(){const disc=discountAmount(),final=cartTotalFinal(),dl=document.getElementById('disc-line'),da=document.getElementById('disc-amount-display'),ct=document.getElementById('checkout-total');if(disc>0){if(dl)dl.style.display='flex';if(da)da.textContent='-'+fmt(disc);}else{if(dl)dl.style.display='none';}if(ct)ct.textContent=fmt(final);}
+  function updateCheckoutTotal(){const disc=discountAmount(),final=cartTotalFinal(),dl=document.getElementById('disc-line'),da=document.getElementById('disc-amount-display'),ct=document.getElementById('checkout-total');if(disc>0){if(dl)dl.style.display='flex';if(da)da.textContent='-'+fmt(disc);}else{if(dl)dl.style.display='none';}if(ct)ct.textContent=fmt(final);refreshCommPreview();}
   function setDiscType(t){discountType=t;[document.getElementById('disc-btn-pct'),document.getElementById('disc-btn-fix')].forEach((b,i)=>b&&b.classList.toggle('active',(t==='pct'&&i===0)||(t==='fix'&&i===1)));calcDiscount();}
   function calcDiscount(){discountVal=parseFloat(document.getElementById('disc-val').value)||0;updateCheckoutTotal();if(document.getElementById('cash-received').value)calcChange();}
   function applyPromo(){const sel=document.getElementById('disc-promo-sel');const id=sel?sel.value:'';if(!id){discountVal=0;document.getElementById('disc-val').value='';updateCheckoutTotal();return;}const p=getPromos().find(x=>x.id===id);if(!p)return;setDiscType(p.type);document.getElementById('disc-val').value=p.value;discountVal=p.value;updateCheckoutTotal();}
   function fillPromoSelect(){const sel=document.getElementById('disc-promo-sel');if(!sel)return;sel.innerHTML='<option value="">Sin descuento</option>'+getPromos().map(p=>'<option value="'+p.id+'">'+p.name+' ('+(p.type==='pct'?p.value+'%':'$'+p.value)+')</option>').join('');}
   function closeCheckout(){$('modal-checkout').classList.remove('show');}
-  function selPay(m){payMethod=m;['cash','card','transfer','personal'].forEach(x=>{const b=$('pay-'+x);if(b)b.classList.toggle('selected',x===m);});$('cash-group').style.display=m==='cash'?'block':'none';if(m!=='cash')$('change-box').className='change-box';const pd=parseFloat(getCfg().personalDisc)||0;if(m==='personal'&&pd>0){const dv=$('disc-val');if(dv)dv.value=pd;discountVal=pd;setDiscType('pct');}else if(m!=='personal'){const dv=$('disc-val');if(dv)dv.value='';discountVal=0;const sel=$('disc-promo-sel');if(sel)sel.value='';updateCheckoutTotal();}}
+  function selPay(m){payMethod=m;['cash','card','transfer','personal'].forEach(x=>{const b=$('pay-'+x);if(b)b.classList.toggle('selected',x===m);});$('cash-group').style.display=m==='cash'?'block':'none';if(m!=='cash')$('change-box').className='change-box';const pd=parseFloat(getCfg().personalDisc)||0;if(m==='personal'&&pd>0){const dv=$('disc-val');if(dv)dv.value=pd;discountVal=pd;setDiscType('pct');}else if(m!=='personal'){const dv=$('disc-val');if(dv)dv.value='';discountVal=0;const sel=$('disc-promo-sel');if(sel)sel.value='';updateCheckoutTotal();}refreshCommPreview();}
   function calcChange(){const total=cartTotalFinal(),rec=parseFloat($('cash-received').value)||0,cb=$('change-box');if(!rec){cb.className='change-box';return;}const diff=rec-total;cb.className='change-box show '+(diff>=0?'ok':'short');$('change-label').textContent=diff>=0?'Cambio a entregar':'Falta por cobrar';$('change-label').className='change-label'+(diff<0?' short':'');$('change-amount').textContent=fmt(Math.abs(diff));$('change-amount').className='change-amount'+(diff<0?' short':'');}
 
   async function completeSale(){
     const subtotal=cartTotal(),disc=discountAmount(),total=cartTotalFinal(),rec=payMethod==='cash'?(parseFloat(document.getElementById('cash-received').value)||0):total;
     if(payMethod==='cash'&&rec<total){toast('Monto insuficiente','error');return;}
     const cfg=getCfg(),orderN=getOrderN();
-    const saleItems=cart.map(i=>{if(!commEmpSelected)return{...i,commissionAmt:0};const prod=getProds().find(p=>p.id===i.id);const cType=prod?.commissionType||'pct';const cVal=parseFloat(prod?.commissionVal)||0;const commissionAmt=cType==='pct'?parseFloat((i.price*i.qty*cVal/100).toFixed(2)):parseFloat((cVal*i.qty).toFixed(2));return{...i,commissionAmt};});
-    const totalCommission=commEmpSelected?parseFloat(saleItems.reduce((s,i)=>s+(i.commissionAmt||0),0).toFixed(2)):0;
-    const sale={id:uid(),orderN,date:new Date().toISOString(),items:saleItems,subtotal,discount:disc,discountType,discountVal,total,pay:payMethod,received:rec,cajera:cajeraName,commEmp:commEmpSelected||'',totalCommission};
+    const saleItems=cart.map(i=>({...i}));
+    const canComm=commEmpSelected&&payMethod!=='personal';
+    const emps=(getCfg().empleados||[]).map(e=>typeof e==='string'?{name:e,pct:0}:e);
+    const commEmpObj=canComm?emps.find(e=>e.name===commEmpSelected):null;
+    const commPct=parseFloat(commEmpObj?.pct)||0;
+    const totalCommission=canComm?parseFloat((total*commPct/100).toFixed(2)):0;
+    const sale={id:uid(),orderN,date:new Date().toISOString(),items:saleItems,subtotal,discount:disc,discountType,discountVal,total,pay:payMethod,received:rec,cajera:cajeraName,commEmp:canComm?commEmpSelected:'',commPct:canComm?commPct:0,totalCommission};
     await writeSale(sale);writeOrderN(orderN+1);
     const change=payMethod==='cash'?rec-total:0;
     printTicket(sale,change,cfg);
@@ -1206,7 +1218,10 @@ const App=(()=>{
     if(!list.length){tbody.innerHTML='<tr><td colspan="6" class="empty-table">Sin productos. Agrega tu primer producto arriba.</td></tr>';return;}
     tbody.innerHTML=list.map(p=>{const cat=cats.find(c=>c.id===p.cat);return`<tr><td class="prod-emoji-cell">${p.emoji||'🍽️'}</td><td class="prod-name-cell">${p.name}</td><td class="prod-cat-cell">${cat?cat.emoji+' '+cat.name:p.cat}</td><td class="prod-price-cell" style="${p.price===0?'color:var(--success);font-weight:900':''}">${p.price===0?'🎁 GRATIS':fmt(p.price)}</td><td><button class="toggle-switch ${p.on!==false?'on':'off'}" onclick="App.toggleProd('${p.id}')"></button></td><td><div class="prod-actions"><button class="btn btn-sm btn-outline" onclick="App.editProduct('${p.id}')">✏️ Editar</button><button class="btn btn-sm btn-danger" onclick="App.deleteProd('${p.id}')">🗑️</button></div></td></tr>`;}).join('');
   }
-  let _recipe=[];
+  let _recipe=[], _empleados=[];
+  function renderEmpleados(){const el=$('empleados-list');if(!el)return;if(!_empleados.length){el.innerHTML='<span style="color:#ccc;font-size:.85rem">Sin empleados. Agrega uno abajo.</span>';return;}el.innerHTML=_empleados.map((e,i)=>`<div style="display:flex;gap:6px;align-items:center"><input type="text" class="form-input" style="flex:1" value="${e.name}" oninput="_empleados[${i}].name=this.value"><div style="display:flex;align-items:center;gap:4px"><input type="number" class="form-input" style="width:70px" value="${e.pct}" min="0" max="100" step="0.5" oninput="_empleados[${i}].pct=parseFloat(this.value)||0"><span style="font-size:.85rem;color:#666">%</span></div><button type="button" class="btn btn-sm btn-danger" onclick="App.removeEmpleado(${i})">✕</button></div>`).join('');}
+  function addEmpleado(){const name=($('new-emp-name').value||'').trim();if(!name){toast('Escribe el nombre del empleado','error');return;}_empleados.push({name,pct:parseFloat($('new-emp-pct').value)||0});$('new-emp-name').value='';$('new-emp-pct').value='';renderEmpleados();}
+  function removeEmpleado(i){_empleados.splice(i,1);renderEmpleados();}
   function recipeInvOptions(){return getInventory().map(i=>`<option value="${i.id}">${i.emoji||'📦'} ${i.name} (${i.unit})</option>`).join('');}
   function addRecipeRow(invId='',qty=''){
     _recipe.push({_id:uid()});
@@ -1225,15 +1240,13 @@ const App=(()=>{
     const name=$('f-name').value.trim(),price=parseFloat($('f-price').value),cat=$('f-cat').value,emoji=$('f-emoji').value.trim()||'🍽️',editId=$('edit-id').value;
     if(!name){toast('El nombre es requerido','error');return;}if(isNaN(price)||price<0){toast('El precio debe ser 0 o mayor','error');return;}
     const recipe=getRecipeData();
-    const commissionType=$('f-comm-type').value||'pct';
-    const commissionVal=parseFloat($('f-comm-val').value)||0;
     const prods=getProds();
-    if(editId){const idx=prods.findIndex(p=>p.id===editId);if(idx>=0)prods[idx]={...prods[idx],name,price,cat,emoji,recipe,commissionType,commissionVal};toast('✅ Producto actualizado');}
-    else{prods.push({id:uid(),name,price,cat,emoji,on:true,recipe,commissionType,commissionVal});toast('✅ Producto agregado');}
+    if(editId){const idx=prods.findIndex(p=>p.id===editId);if(idx>=0)prods[idx]={...prods[idx],name,price,cat,emoji,recipe};toast('✅ Producto actualizado');}
+    else{prods.push({id:uid(),name,price,cat,emoji,on:true,recipe});toast('✅ Producto agregado');}
     writeProds(prods);cancelEdit();renderProdTable();renderProducts();
   }
-  function editProduct(id){const p=getProds().find(x=>x.id===id);if(!p)return;$('f-name').value=p.name;$('f-price').value=p.price;$('f-cat').value=p.cat;$('f-emoji').value=p.emoji||'';$('edit-id').value=p.id;renderRecipe(p.recipe);$('f-comm-type').value=p.commissionType||'pct';$('f-comm-val').value=p.commissionVal||0;$('prod-form-title').textContent='✏️ Editar Producto';$('save-prod-label').textContent='💾 Actualizar Producto';$('cancel-edit-btn').style.display='inline-flex';document.querySelector('.form-card').scrollIntoView({behavior:'smooth'});}
-  function cancelEdit(){['f-name','f-price','f-emoji','edit-id'].forEach(id=>$(id).value='');renderRecipe([]);$('f-comm-type').value='pct';$('f-comm-val').value='0';$('prod-form-title').textContent='➕ Agregar Nuevo Producto';$('save-prod-label').textContent='💾 Guardar Producto';$('cancel-edit-btn').style.display='none';}
+  function editProduct(id){const p=getProds().find(x=>x.id===id);if(!p)return;$('f-name').value=p.name;$('f-price').value=p.price;$('f-cat').value=p.cat;$('f-emoji').value=p.emoji||'';$('edit-id').value=p.id;renderRecipe(p.recipe);$('prod-form-title').textContent='✏️ Editar Producto';$('save-prod-label').textContent='💾 Actualizar Producto';$('cancel-edit-btn').style.display='inline-flex';document.querySelector('.form-card').scrollIntoView({behavior:'smooth'});}
+  function cancelEdit(){['f-name','f-price','f-emoji','edit-id'].forEach(id=>$(id).value='');renderRecipe([]);$('prod-form-title').textContent='➕ Agregar Nuevo Producto';$('save-prod-label').textContent='💾 Guardar Producto';$('cancel-edit-btn').style.display='none';}
   async function deleteProd(id){if(!await showConfirm('¿Eliminar este producto?'))return;writeProds(getProds().filter(p=>p.id!==id));renderProdTable();renderProducts();toast('Producto eliminado','error');}
   function toggleProd(id){const prods=getProds(),p=prods.find(x=>x.id===id);if(p)p.on=!(p.on!==false);writeProds(prods);renderProdTable();renderProducts();}
 
@@ -1439,8 +1452,8 @@ const App=(()=>{
   async function deletePromo(id){if(!await showConfirm('Eliminar esta promocion?'))return;writePromos(getPromos().filter(p=>p.id!==id));renderPromosList();toast('Eliminada','error');}
   function renderPromosList(){const el=document.getElementById('promo-list-admin');if(!el)return;const promos=getPromos();if(!promos.length){el.innerHTML='<span style="color:#ccc">Sin promociones aun</span>';return;}el.innerHTML='<div class="promo-list">'+promos.map(p=>'<div class="promo-item"><div><div class="promo-name">'+p.name+'</div><div class="promo-val">'+(p.type==='pct'?p.value+'% de descuento':'$'+p.value+' de descuento')+'</div></div><button class="btn btn-sm btn-danger" onclick="App.deletePromo(\''+p.id+'\')">🗑️</button></div>').join('')+'</div>';}  function goTab(t){document.querySelectorAll('.admin-body>div').forEach(d=>d.style.display='none');document.querySelectorAll('.admin-tab').forEach(b=>b.classList.remove('active'));const tabs={products:0,categories:1,promos:2,inventory:3,sales:4,settings:5};$('tab-'+t).style.display='block';document.querySelectorAll('.admin-tab')[tabs[t]].classList.add('active');if(t==='sales')renderSales();if(t==='products'){fillCatSelect();renderProdTable();}if(t==='categories')renderCatsList();if(t==='promos')renderPromosList();if(t==='inventory'){renderInventory();loadInvLog();}if(t==='settings')loadCfg();}
 
-  function loadCfg(){const c=getCfg();$('cfg-name').value=c.name||'';$('cfg-tel').value=c.tel||'';$('cfg-addr').value=c.addr||'';$('cfg-msg').value=c.msg||'';$('cfg-pin').value=c.pin||'';$('cfg-alert-email').value=c.alertEmail||'';$('cfg-gas').value=c.gas||'';$('cfg-personal-disc').value=c.personalDisc||'';$('cfg-empleados').value=(c.empleados||[]).join('\n');$('cfg-ejs-pubkey').value=c.ejsPubKey||'';$('cfg-ejs-service').value=c.ejsService||'';$('cfg-ejs-template').value=c.ejsTemplate||'';$('cfg-ejs-email').value=c.ejsEmail||'';$('cfg-ejs-hora1').value=c.ejsHora1||'22:00';$('cfg-ejs-hora2').value=c.ejsHora2||'';const days=c.ejsDays||[1,2,3,4,5,6,0];[0,1,2,3,4,5,6].forEach(d=>{const el=$('cfg-ejs-d'+d);if(el)el.checked=days.includes(d);});}
-  function saveSettings(){const days=[];[0,1,2,3,4,5,6].forEach(d=>{const el=$('cfg-ejs-d'+d);if(el&&el.checked)days.push(d);});const empleados=$('cfg-empleados').value.split('\n').map(s=>s.trim()).filter(Boolean);const cfg={name:$('cfg-name').value.trim()||'HR BURGER HOUSE',tel:$('cfg-tel').value.trim(),addr:$('cfg-addr').value.trim(),msg:$('cfg-msg').value.trim()||'¡Gracias por su preferencia!',pin:$('cfg-pin').value.trim()||'1234',alertEmail:$('cfg-alert-email').value.trim(),gas:$('cfg-gas').value.trim(),personalDisc:parseFloat($('cfg-personal-disc').value)||0,empleados,ejsPubKey:$('cfg-ejs-pubkey').value.trim(),ejsService:$('cfg-ejs-service').value.trim(),ejsTemplate:$('cfg-ejs-template').value.trim(),ejsEmail:$('cfg-ejs-email').value.trim(),ejsHora1:$('cfg-ejs-hora1').value||'22:00',ejsHora2:$('cfg-ejs-hora2').value||'',ejsDays:days};writeCfg(cfg);toast('✅ Ajustes guardados');}
+  function loadCfg(){const c=getCfg();$('cfg-name').value=c.name||'';$('cfg-tel').value=c.tel||'';$('cfg-addr').value=c.addr||'';$('cfg-msg').value=c.msg||'';$('cfg-pin').value=c.pin||'';$('cfg-alert-email').value=c.alertEmail||'';$('cfg-gas').value=c.gas||'';$('cfg-personal-disc').value=c.personalDisc!=null?c.personalDisc:'';_empleados=(c.empleados||[]).map(e=>typeof e==='string'?{name:e,pct:0}:{name:e.name||'',pct:parseFloat(e.pct)||0});renderEmpleados();$('cfg-ejs-pubkey').value=c.ejsPubKey||'';$('cfg-ejs-service').value=c.ejsService||'';$('cfg-ejs-template').value=c.ejsTemplate||'';$('cfg-ejs-email').value=c.ejsEmail||'';$('cfg-ejs-hora1').value=c.ejsHora1||'22:00';$('cfg-ejs-hora2').value=c.ejsHora2||'';const days=c.ejsDays||[1,2,3,4,5,6,0];[0,1,2,3,4,5,6].forEach(d=>{const el=$('cfg-ejs-d'+d);if(el)el.checked=days.includes(d);});}
+  function saveSettings(){const days=[];[0,1,2,3,4,5,6].forEach(d=>{const el=$('cfg-ejs-d'+d);if(el&&el.checked)days.push(d);});const empleados=_empleados.filter(e=>e.name.trim());const cfg={...getCfg(),name:$('cfg-name').value.trim()||'HR BURGER HOUSE',tel:$('cfg-tel').value.trim(),addr:$('cfg-addr').value.trim(),msg:$('cfg-msg').value.trim()||'¡Gracias por su preferencia!',pin:$('cfg-pin').value.trim()||'1234',alertEmail:$('cfg-alert-email').value.trim(),gas:$('cfg-gas').value.trim(),personalDisc:$('cfg-personal-disc').value!==''?parseFloat($('cfg-personal-disc').value)||0:getCfg().personalDisc||0,empleados,ejsPubKey:$('cfg-ejs-pubkey').value.trim(),ejsService:$('cfg-ejs-service').value.trim(),ejsTemplate:$('cfg-ejs-template').value.trim(),ejsEmail:$('cfg-ejs-email').value.trim(),ejsHora1:$('cfg-ejs-hora1').value||'22:00',ejsHora2:$('cfg-ejs-hora2').value||'',ejsDays:days};writeCfg(cfg);toast('✅ Ajustes guardados');}
 
   function forceUpdate(){
     if('caches' in window)caches.keys().then(ks=>Promise.all(ks.map(k=>caches.delete(k))));

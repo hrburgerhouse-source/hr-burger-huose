@@ -414,6 +414,11 @@ textarea.form-input{height:130px;resize:vertical;font-family:monospace;font-size
         <button class="pay-btn" id="pay-personal" onclick="App.selPay('personal')"><span class="pay-icon">👨‍🍳</span>Personal</button>
       </div>
     </div>
+    <div class="form-group" style="margin-top:4px">
+      <label class="form-label">💰 Comisión para Empleado</label>
+      <select class="form-select" id="comm-emp-sel" onchange="App.onCommEmpChange()"><option value="">Sin comisión</option></select>
+      <div id="comm-preview-line" style="display:none;margin-top:6px;padding:6px 10px;background:#fffbf0;border:1px solid #f0c060;border-radius:8px;font-size:.88rem;color:#b8860b;font-weight:600"></div>
+    </div>
     <div class="form-group" id="cash-group"><label class="form-label">Efectivo Recibido ($)</label>
       <input type="number" class="form-input" id="cash-received" placeholder="0.00" step=".50" min="0" oninput="App.calcChange()">
     </div>
@@ -466,7 +471,7 @@ textarea.form-input{height:130px;resize:vertical;font-family:monospace;font-size
     </div>
     <div style="overflow-x:auto;max-height:55vh;overflow-y:auto">
       <table class="sales-table" style="width:100%">
-        <thead><tr><th>#</th><th>Hora</th><th>Productos</th><th>Pago</th><th>Total</th><th>Comisión</th><th></th></tr></thead>
+        <thead><tr><th>#</th><th>Hora</th><th>Productos</th><th>Pago</th><th>Total</th><th>Comisión Para</th><th></th></tr></thead>
         <tbody id="historial-tbody"></tbody>
       </table>
     </div>
@@ -490,7 +495,7 @@ textarea.form-input{height:130px;resize:vertical;font-family:monospace;font-size
     </div>
     <div class="corte-grand-total"><span class="corte-grand-label">💰 TOTAL DEL DÍA</span><span class="corte-grand-amount" id="corte-total">$0.00</span></div>
     <div id="corte-comisiones-section" style="display:none;margin:0 0 8px;background:#fffbf0;border:1px solid #f0c060;border-radius:10px;padding:10px 14px">
-      <div style="font-size:.78rem;color:#b8860b;font-weight:700;margin-bottom:6px">💰 COMISIONES DEL DÍA</div>
+      <div style="font-size:.78rem;color:#b8860b;font-weight:700;margin-bottom:6px">💰 COMISIONES A PAGAR</div>
       <div id="corte-comisiones-body"></div>
     </div>
     <div class="corte-sales-list" id="corte-sales-list"></div>
@@ -669,6 +674,7 @@ textarea.form-input{height:130px;resize:vertical;font-family:monospace;font-size
         <div class="form-group"><label class="form-label">Mensaje en Ticket</label><input type="text" class="form-input" id="cfg-msg" placeholder="¡Gracias por su preferencia!"></div>
         <div class="form-group"><label class="form-label">PIN de Admin (4 dígitos)</label><input type="password" class="form-input" id="cfg-pin" placeholder="1234" maxlength="4"></div>
         <div class="form-group"><label class="form-label">Descuento empleado — Comida de Personal (%)</label><input type="number" class="form-input" id="cfg-personal-disc" placeholder="Ej: 50" min="0" max="100" step="1" style="max-width:160px"></div>
+        <div class="form-group"><label class="form-label">Empleados (uno por línea)</label><textarea class="form-input" id="cfg-empleados" rows="4" placeholder="María&#10;Juan&#10;Ana" style="resize:vertical;font-family:inherit"></textarea></div>
         <div class="form-group"><label class="form-label">Correo para alertas de inventario</label>
           <div style="display:flex;gap:8px;align-items:center">
             <input type="email" class="form-input" id="cfg-alert-email" placeholder="correo@ejemplo.com" style="flex:1">
@@ -840,7 +846,7 @@ function _escpos(lines){
 // ─────────────────────────────────────────────────────────────────────────────
 
 const App=(()=>{
-  let cart=[],payMethod='cash',pinBuf='',filterCat='all',clockTimer=null,cajeraName='',db=null;
+  let cart=[],payMethod='cash',pinBuf='',filterCat='all',clockTimer=null,cajeraName='',db=null,commEmpSelected='';
   const cache={products:[],categories:[],settings:{},orderNumber:1};
   const DEF_CATS=[{id:'burgers',name:'Hamburguesas',emoji:'🍔'},{id:'drinks',name:'Bebidas',emoji:'🥤'},{id:'sides',name:'Acompañantes',emoji:'🍟'},{id:'otros',name:'Otros',emoji:'🍽️'},{id:'personal',name:'Personal',emoji:'👨‍🍳'}];
   const DEF_INV=[{id:'carne-res',name:'Carne de Res',emoji:'🥩',unit:'kg',qty:10,minQty:2},{id:'carne-cerdo',name:'Carne de Cerdo',emoji:'🐷',unit:'kg',qty:10,minQty:2},{id:'pan',name:'Pan de Hamburguesa',emoji:'🍞',unit:'piezas',qty:50,minQty:10},{id:'bebidas',name:'Bebidas',emoji:'🥤',unit:'unidades',qty:30,minQty:5}];
@@ -997,7 +1003,10 @@ const App=(()=>{
     else{pp.classList.add('m-hidden');cp.classList.add('m-active');if(tp)tp.classList.remove('active');if(tc)tc.classList.add('active');}
   }
 
-  function openCheckout(){if(!cart.length)return;discountType='pct';discountVal=0;const dv=document.getElementById('disc-val');if(dv)dv.value='';const dl=document.getElementById('disc-line');if(dl)dl.style.display='none';fillPromoSelect();setDiscType('pct');const total=cartTotal();$('checkout-total').textContent=fmt(total);$('checkout-items').innerHTML=cart.map(i=>`<div class="checkout-line"><span>${i.qty}× ${i.name}</span><span>${fmt(i.price*i.qty)}</span></div>`).join('');$('cash-received').value='';$('change-box').className='change-box';selPay('cash');$('modal-checkout').classList.add('show');}
+  function openCheckout(){if(!cart.length)return;discountType='pct';discountVal=0;commEmpSelected='';const dv=document.getElementById('disc-val');if(dv)dv.value='';const dl=document.getElementById('disc-line');if(dl)dl.style.display='none';fillPromoSelect();fillCommEmpSelect();setDiscType('pct');const total=cartTotal();$('checkout-total').textContent=fmt(total);$('checkout-items').innerHTML=cart.map(i=>`<div class="checkout-line"><span>${i.qty}× ${i.name}</span><span>${fmt(i.price*i.qty)}</span></div>`).join('');$('cash-received').value='';$('change-box').className='change-box';const cp=$('comm-preview-line');if(cp)cp.style.display='none';selPay('cash');$('modal-checkout').classList.add('show');}
+  function fillCommEmpSelect(){const sel=$('comm-emp-sel');if(!sel)return;const emps=(getCfg().empleados||[]);sel.innerHTML='<option value="">Sin comisión</option>'+emps.map(e=>`<option value="${e}">${e}</option>`).join('');}
+  function calcCommissionForCart(){return cart.reduce((sum,i)=>{const prod=getProds().find(p=>p.id===i.id);const cType=prod?.commissionType||'pct';const cVal=parseFloat(prod?.commissionVal)||0;const amt=cType==='pct'?i.price*i.qty*cVal/100:cVal*i.qty;return sum+amt;},0);}
+  function onCommEmpChange(){const sel=$('comm-emp-sel');commEmpSelected=sel?sel.value:'';const cp=$('comm-preview-line');if(!cp)return;if(commEmpSelected){const total=calcCommissionForCart();cp.style.display='block';cp.textContent='Comisión para '+commEmpSelected+': '+fmt(total);}else{cp.style.display='none';}}
   function getPromos(){return cache.promos||[];}
   function discountAmount(){const sub=cartTotal();return discountType==='pct'?Math.min(sub,sub*discountVal/100):Math.min(sub,discountVal||0);}
   function cartTotalFinal(){return Math.max(0,cartTotal()-discountAmount());}
@@ -1014,9 +1023,9 @@ const App=(()=>{
     const subtotal=cartTotal(),disc=discountAmount(),total=cartTotalFinal(),rec=payMethod==='cash'?(parseFloat(document.getElementById('cash-received').value)||0):total;
     if(payMethod==='cash'&&rec<total){toast('Monto insuficiente','error');return;}
     const cfg=getCfg(),orderN=getOrderN();
-    const saleItems=cart.map(i=>{const prod=getProds().find(p=>p.id===i.id);const cType=prod?.commissionType||'pct';const cVal=parseFloat(prod?.commissionVal)||0;const commissionAmt=cType==='pct'?parseFloat((i.price*i.qty*cVal/100).toFixed(2)):parseFloat((cVal*i.qty).toFixed(2));return{...i,commissionAmt};});
-    const totalCommission=parseFloat(saleItems.reduce((s,i)=>s+i.commissionAmt,0).toFixed(2));
-    const sale={id:uid(),orderN,date:new Date().toISOString(),items:saleItems,subtotal,discount:disc,discountType,discountVal,total,pay:payMethod,received:rec,cajera:cajeraName,totalCommission};
+    const saleItems=cart.map(i=>{if(!commEmpSelected)return{...i,commissionAmt:0};const prod=getProds().find(p=>p.id===i.id);const cType=prod?.commissionType||'pct';const cVal=parseFloat(prod?.commissionVal)||0;const commissionAmt=cType==='pct'?parseFloat((i.price*i.qty*cVal/100).toFixed(2)):parseFloat((cVal*i.qty).toFixed(2));return{...i,commissionAmt};});
+    const totalCommission=commEmpSelected?parseFloat(saleItems.reduce((s,i)=>s+(i.commissionAmt||0),0).toFixed(2)):0;
+    const sale={id:uid(),orderN,date:new Date().toISOString(),items:saleItems,subtotal,discount:disc,discountType,discountVal,total,pay:payMethod,received:rec,cajera:cajeraName,commEmp:commEmpSelected||'',totalCommission};
     await writeSale(sale);writeOrderN(orderN+1);
     const change=payMethod==='cash'?rec-total:0;
     printTicket(sale,change,cfg);
@@ -1035,7 +1044,7 @@ const App=(()=>{
       });
     });
     if(invChanged)writeInventory(invItems);
-    const gasUrl=GAS_URL();if(gasUrl){try{fetch(gasUrl,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},body:JSON.stringify({orden:String(orderN).padStart(3,'0'),fecha:new Date().toLocaleDateString('es-MX'),hora:new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}),cajera:cajeraName,productos:sale.items.map(i=>i.qty+'x '+i.name).join(' | '),subtotal:subtotal.toFixed(2),descuento:disc.toFixed(2),total:total.toFixed(2),pago:payMethod==='cash'?'Efectivo':payMethod==='card'?'Tarjeta':'Transferencia',recibido:rec.toFixed(2),cambio:change.toFixed(2),comision:totalCommission.toFixed(2)})});}catch(e){}}
+    const gasUrl=GAS_URL();if(gasUrl){try{fetch(gasUrl,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},body:JSON.stringify({orden:String(orderN).padStart(3,'0'),fecha:new Date().toLocaleDateString('es-MX'),hora:new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}),cajera:cajeraName,productos:sale.items.map(i=>i.qty+'x '+i.name).join(' | '),subtotal:subtotal.toFixed(2),descuento:disc.toFixed(2),total:total.toFixed(2),pago:payMethod==='cash'?'Efectivo':payMethod==='card'?'Tarjeta':'Transferencia',recibido:rec.toFixed(2),cambio:change.toFixed(2),comision:totalCommission.toFixed(2),comisionEmp:commEmpSelected||''})});}catch(e){}}
   }
 
   async function openMiHistorial(){
@@ -1049,6 +1058,8 @@ const App=(()=>{
     $('hist-count').textContent=sales.length;
     $('hist-total').textContent=fmt(total);
     $('hist-comm').textContent=fmt(totalComm);
+    const hCommLabel=$('hist-comm').previousElementSibling;
+    if(hCommLabel)hCommLabel.textContent='Comisiones asignadas';
     const payLabel={cash:'💵 Efectivo',card:'💳 Tarjeta',transfer:'📲 Transfer.',personal:'👨‍🍳 Personal'};
     const tbody=$('historial-tbody');
     if(!sales.length){tbody.innerHTML='<tr><td colspan="7" class="empty-table">Sin ventas en este turno</td></tr>';return;}
@@ -1058,7 +1069,7 @@ const App=(()=>{
       <td class="sale-products" style="font-size:.78rem">${s.items?s.items.map(i=>i.qty+'x '+i.name).join(', '):''}</td>
       <td><span style="font-size:.78rem">${payLabel[s.pay]||s.pay}</span></td>
       <td class="sale-total-cell">${fmt(s.total)}</td>
-      <td style="color:#b8860b;font-weight:700;font-size:.85rem">${s.totalCommission?fmt(s.totalCommission):'—'}</td>
+      <td style="color:#b8860b;font-size:.8rem">${s.commEmp&&s.totalCommission?s.commEmp+'<br>'+fmt(s.totalCommission):'—'}</td>
       <td><button class="btn btn-sm btn-outline" onclick="App.reprint('${s.id}')">🖨️</button></td>
     </tr>`).join('');
   }
@@ -1083,7 +1094,7 @@ const App=(()=>{
     if($('corte-transfer'))$('corte-transfer').textContent=fmt(byPay.transfer);if($('corte-transfer-c'))$('corte-transfer-c').textContent=countPay.transfer+' ventas';
     if($('corte-personal'))$('corte-personal').textContent=countPay.personal+' ord.';if($('corte-personal-c'))$('corte-personal-c').textContent=countPay.personal+' consumos';
     const commByEmp={};
-    sales.forEach(s=>{if(s.totalCommission>0){const emp=s.cajera||'—';commByEmp[emp]=(commByEmp[emp]||0)+s.totalCommission;}});
+    sales.forEach(s=>{if(s.commEmp&&s.totalCommission>0){commByEmp[s.commEmp]=(commByEmp[s.commEmp]||0)+s.totalCommission;}});
     const commEntries=Object.entries(commByEmp);
     const csec=$('corte-comisiones-section');
     const cbody=$('corte-comisiones-body');
@@ -1248,7 +1259,7 @@ const App=(()=>{
     const filtered=await getSales(dateVal?dateVal.value:null);
     if(!filtered.length){toast('Sin ventas para exportar','error');return;}
     const BOM='﻿';
-    const rows=[['#Orden','Fecha','Hora','Cajera','Productos','Total','Pago','Recibido','Cambio','Comisión'],...filtered.map(s=>[String(s.orderN).padStart(3,'0'),new Date(s.date).toLocaleDateString('es-MX'),new Date(s.date).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}),s.cajera||'',s.items?s.items.map(i=>i.qty+'x '+i.name).join(' | '):'',s.total.toFixed(2),s.pay==='cash'?'Efectivo':s.pay==='card'?'Tarjeta':'Transferencia',(s.received||0).toFixed(2),((s.received||0)-s.total).toFixed(2),(s.totalCommission||0).toFixed(2)])];
+    const rows=[['#Orden','Fecha','Hora','Cajera','Productos','Total','Pago','Recibido','Cambio','Comisión Para','Comisión ($)'],...filtered.map(s=>[String(s.orderN).padStart(3,'0'),new Date(s.date).toLocaleDateString('es-MX'),new Date(s.date).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}),s.cajera||'',s.items?s.items.map(i=>i.qty+'x '+i.name).join(' | '):'',s.total.toFixed(2),s.pay==='cash'?'Efectivo':s.pay==='card'?'Tarjeta':'Transferencia',(s.received||0).toFixed(2),((s.received||0)-s.total).toFixed(2),s.commEmp||'',(s.totalCommission||0).toFixed(2)])];
     const csv=BOM+rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
     const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download='ventas-'+localDate()+'.csv';a.click();
   }
@@ -1428,8 +1439,8 @@ const App=(()=>{
   async function deletePromo(id){if(!await showConfirm('Eliminar esta promocion?'))return;writePromos(getPromos().filter(p=>p.id!==id));renderPromosList();toast('Eliminada','error');}
   function renderPromosList(){const el=document.getElementById('promo-list-admin');if(!el)return;const promos=getPromos();if(!promos.length){el.innerHTML='<span style="color:#ccc">Sin promociones aun</span>';return;}el.innerHTML='<div class="promo-list">'+promos.map(p=>'<div class="promo-item"><div><div class="promo-name">'+p.name+'</div><div class="promo-val">'+(p.type==='pct'?p.value+'% de descuento':'$'+p.value+' de descuento')+'</div></div><button class="btn btn-sm btn-danger" onclick="App.deletePromo(\''+p.id+'\')">🗑️</button></div>').join('')+'</div>';}  function goTab(t){document.querySelectorAll('.admin-body>div').forEach(d=>d.style.display='none');document.querySelectorAll('.admin-tab').forEach(b=>b.classList.remove('active'));const tabs={products:0,categories:1,promos:2,inventory:3,sales:4,settings:5};$('tab-'+t).style.display='block';document.querySelectorAll('.admin-tab')[tabs[t]].classList.add('active');if(t==='sales')renderSales();if(t==='products'){fillCatSelect();renderProdTable();}if(t==='categories')renderCatsList();if(t==='promos')renderPromosList();if(t==='inventory'){renderInventory();loadInvLog();}if(t==='settings')loadCfg();}
 
-  function loadCfg(){const c=getCfg();$('cfg-name').value=c.name||'';$('cfg-tel').value=c.tel||'';$('cfg-addr').value=c.addr||'';$('cfg-msg').value=c.msg||'';$('cfg-pin').value=c.pin||'';$('cfg-alert-email').value=c.alertEmail||'';$('cfg-gas').value=c.gas||'';$('cfg-personal-disc').value=c.personalDisc||'';$('cfg-ejs-pubkey').value=c.ejsPubKey||'';$('cfg-ejs-service').value=c.ejsService||'';$('cfg-ejs-template').value=c.ejsTemplate||'';$('cfg-ejs-email').value=c.ejsEmail||'';$('cfg-ejs-hora1').value=c.ejsHora1||'22:00';$('cfg-ejs-hora2').value=c.ejsHora2||'';const days=c.ejsDays||[1,2,3,4,5,6,0];[0,1,2,3,4,5,6].forEach(d=>{const el=$('cfg-ejs-d'+d);if(el)el.checked=days.includes(d);});}
-  function saveSettings(){const days=[];[0,1,2,3,4,5,6].forEach(d=>{const el=$('cfg-ejs-d'+d);if(el&&el.checked)days.push(d);});const cfg={name:$('cfg-name').value.trim()||'HR BURGER HOUSE',tel:$('cfg-tel').value.trim(),addr:$('cfg-addr').value.trim(),msg:$('cfg-msg').value.trim()||'¡Gracias por su preferencia!',pin:$('cfg-pin').value.trim()||'1234',alertEmail:$('cfg-alert-email').value.trim(),gas:$('cfg-gas').value.trim(),personalDisc:parseFloat($('cfg-personal-disc').value)||0,ejsPubKey:$('cfg-ejs-pubkey').value.trim(),ejsService:$('cfg-ejs-service').value.trim(),ejsTemplate:$('cfg-ejs-template').value.trim(),ejsEmail:$('cfg-ejs-email').value.trim(),ejsHora1:$('cfg-ejs-hora1').value||'22:00',ejsHora2:$('cfg-ejs-hora2').value||'',ejsDays:days};writeCfg(cfg);toast('✅ Ajustes guardados');}
+  function loadCfg(){const c=getCfg();$('cfg-name').value=c.name||'';$('cfg-tel').value=c.tel||'';$('cfg-addr').value=c.addr||'';$('cfg-msg').value=c.msg||'';$('cfg-pin').value=c.pin||'';$('cfg-alert-email').value=c.alertEmail||'';$('cfg-gas').value=c.gas||'';$('cfg-personal-disc').value=c.personalDisc||'';$('cfg-empleados').value=(c.empleados||[]).join('\n');$('cfg-ejs-pubkey').value=c.ejsPubKey||'';$('cfg-ejs-service').value=c.ejsService||'';$('cfg-ejs-template').value=c.ejsTemplate||'';$('cfg-ejs-email').value=c.ejsEmail||'';$('cfg-ejs-hora1').value=c.ejsHora1||'22:00';$('cfg-ejs-hora2').value=c.ejsHora2||'';const days=c.ejsDays||[1,2,3,4,5,6,0];[0,1,2,3,4,5,6].forEach(d=>{const el=$('cfg-ejs-d'+d);if(el)el.checked=days.includes(d);});}
+  function saveSettings(){const days=[];[0,1,2,3,4,5,6].forEach(d=>{const el=$('cfg-ejs-d'+d);if(el&&el.checked)days.push(d);});const empleados=$('cfg-empleados').value.split('\n').map(s=>s.trim()).filter(Boolean);const cfg={name:$('cfg-name').value.trim()||'HR BURGER HOUSE',tel:$('cfg-tel').value.trim(),addr:$('cfg-addr').value.trim(),msg:$('cfg-msg').value.trim()||'¡Gracias por su preferencia!',pin:$('cfg-pin').value.trim()||'1234',alertEmail:$('cfg-alert-email').value.trim(),gas:$('cfg-gas').value.trim(),personalDisc:parseFloat($('cfg-personal-disc').value)||0,empleados,ejsPubKey:$('cfg-ejs-pubkey').value.trim(),ejsService:$('cfg-ejs-service').value.trim(),ejsTemplate:$('cfg-ejs-template').value.trim(),ejsEmail:$('cfg-ejs-email').value.trim(),ejsHora1:$('cfg-ejs-hora1').value||'22:00',ejsHora2:$('cfg-ejs-hora2').value||'',ejsDays:days};writeCfg(cfg);toast('✅ Ajustes guardados');}
 
   function forceUpdate(){
     if('caches' in window)caches.keys().then(ks=>Promise.all(ks.map(k=>caches.delete(k))));
@@ -1449,9 +1460,9 @@ const App=(()=>{
     const detalle=sales.length?sales.map((s,i)=>'#'+(i+1)+' '+new Date(s.date).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})+' — $'+s.total.toFixed(2)+' ('+( payLabel[s.pay]||s.pay)+')').join('\n'):'Sin ventas registradas hoy.';
     const now=new Date();
     const commByEmpRpt={};
-    sales.forEach(s=>{if(s.totalCommission>0){const emp=s.cajera||'—';commByEmpRpt[emp]=(commByEmpRpt[emp]||0)+s.totalCommission;}});
+    sales.forEach(s=>{if(s.commEmp&&s.totalCommission>0){commByEmpRpt[s.commEmp]=(commByEmpRpt[s.commEmp]||0)+s.totalCommission;}});
     const totalComisiones=Object.values(commByEmpRpt).reduce((a,b)=>a+b,0);
-    const detalleComisiones=Object.entries(commByEmpRpt).length?Object.entries(commByEmpRpt).map(([emp,amt])=>emp+': $'+amt.toFixed(2)).join('\n'):'Sin comisiones registradas.';
+    const detalleComisiones=Object.entries(commByEmpRpt).length?Object.entries(commByEmpRpt).map(([emp,amt])=>emp+': $'+amt.toFixed(2)).join('\n'):'Sin comisiones a pagar.';
     return{fecha:today,hora:now.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}),total_ventas:totalVentas,total_ingresos:totalIngresos.toFixed(2),efectivo:efectivo.toFixed(2),tarjeta:tarjeta.toFixed(2),transferencia:transferencia.toFixed(2),personal:personal.toFixed(2),detalle,total_comisiones:totalComisiones.toFixed(2),detalle_comisiones:detalleComisiones};
   }
   async function previewReport(){
@@ -1474,7 +1485,7 @@ Total ingresos:     $${p.total_ingresos}
 👨‍🍳 Comida Empleado: $${p.personal}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
-COMISIONES DEL DÍA
+COMISIONES A PAGAR
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 💰 Total comisiones: $${p.total_comisiones}
 ${p.detalle_comisiones}

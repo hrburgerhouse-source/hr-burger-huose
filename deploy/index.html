@@ -875,6 +875,9 @@ const App=(()=>{
     if(!cfgStr){showScreen('screen-setup');return;}
     try{firebase.initializeApp(JSON.parse(cfgStr));}catch(e){showScreen('screen-setup');return;}
     db=firebase.database();
+    const isLocalhost=['localhost','127.0.0.1'].includes(location.hostname);
+    const usingHardcoded=!localStorage.getItem('fb_config');
+    if(isLocalhost&&usingHardcoded){const w=document.createElement('div');w.style.cssText='position:fixed;top:0;left:0;right:0;z-index:9999;background:#c0392b;color:#fff;text-align:center;padding:8px 12px;font-weight:700;font-size:.9rem';w.textContent='⚠️ LOCALHOST CONECTADO A FIREBASE DE PRODUCCIÓN — cualquier cambio afecta datos reales';document.body.appendChild(w);}
     showScreen('screen-loading');
     await seedAndListen();
     embedLogo();
@@ -1267,7 +1270,7 @@ const App=(()=>{
     tbody.innerHTML=filtered.map(s=>`<tr><td class="order-num">#${String(s.orderN).padStart(3,'0')}</td><td>${new Date(s.date).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})}</td><td>${s.cajera||'—'}</td><td class="sale-products">${s.items?s.items.map(i=>i.qty+'x '+i.name).join(', '):''}</td><td><span class="badge ${payBadge[s.pay]||''}">${payLabel[s.pay]||s.pay}</span></td><td class="sale-total-cell">${fmt(s.total)}</td><td><button class="btn btn-sm btn-outline" onclick="App.reprint('${s.id}')">🖨️</button></td></tr>`).join('');
   }
   async function reprint(id){const sales=await getSales();const s=sales.find(x=>x.id===id);if(s)printTicket(s,s.received-s.total,getCfg());}
-  async function clearSales(){if(!await showConfirm('¿Eliminar TODO el historial de ventas?'))return;if(db)await db.ref('sales').remove();renderSales();toast('Historial eliminado','error');}
+  async function clearSales(){if(!await showConfirm('¿Eliminar TODO el historial de ventas? Esta acción no se puede deshacer.'))return;const typed=window.prompt('Escribe ELIMINAR (en mayúsculas) para confirmar:');if(typed!=='ELIMINAR'){toast('Cancelado — escribe exactamente ELIMINAR','error');return;}if(db)await db.ref('sales').remove();renderSales();toast('Historial eliminado','error');}
   async function exportCSV(){
     const dateVal=$('sales-date');
     const filtered=await getSales(dateVal?dateVal.value:null);

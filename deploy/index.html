@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <script>
 (function(){
-  var V='8';
+  var V='9';
   var stored=localStorage.getItem('hrb-v');
   if(stored&&stored!==V){
     localStorage.setItem('hrb-v',V);
@@ -26,6 +26,7 @@
 <title>HR Burger House - Sistema de Ventas</title>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -356,6 +357,7 @@ textarea.form-input{height:130px;resize:vertical;font-family:monospace;font-size
         <div style="font-size:.75rem;opacity:.82">Orden <span id="order-num-display">#001</span></div>
       </div>
       <button class="btn btn-ghost" onclick="App.openMiHistorial()">📜 <span class="btn-lbl">Historial</span></button>
+      <button class="btn btn-ghost" onclick="App.openGastos()">💸 <span class="btn-lbl">Gastos</span></button>
       <button class="btn btn-ghost" id="cashier-bt-btn" onclick="App.openPrinterModal()" title="Configurar impresora">🖨️<span id="cashier-bt-dot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ff6b6b;vertical-align:middle;margin-left:3px"></span></button>
       <button class="btn" style="background:rgba(255,255,255,.15);color:white;border:1.5px solid rgba(255,255,255,.35)" onclick="App.openCorte()">📋 <span class="btn-lbl">Corte</span></button>
       <button class="btn btn-ghost" onclick="App.logout()">✕</button>
@@ -474,6 +476,49 @@ textarea.form-input{height:130px;resize:vertical;font-family:monospace;font-size
         <thead><tr><th>#</th><th>Hora</th><th>Productos</th><th>Pago</th><th>Total</th><th>Comisión Para</th><th></th></tr></thead>
         <tbody id="historial-tbody"></tbody>
       </table>
+    </div>
+  </div>
+</div>
+<!-- MODAL GASTOS -->
+<div id="modal-gastos" class="modal-overlay">
+  <div class="modal" style="max-width:460px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div class="modal-title" style="margin-bottom:0">💸 Registrar Gasto</div>
+      <button class="btn btn-ghost" style="color:#aaa" onclick="App.closeGastos()">✕</button>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:16px;border-bottom:1px solid #eee;padding-bottom:10px">
+      <button id="gastos-tab-form" style="flex:1;background:var(--primary);color:white;border:none;border-radius:8px;padding:7px 12px;font-size:.85rem;font-weight:700;cursor:pointer" onclick="App.gastosSwitchTab('form')">+ Nuevo gasto</button>
+      <button id="gastos-tab-list" style="flex:1;background:var(--light);color:#666;border:1px solid #e0e0e0;border-radius:8px;padding:7px 12px;font-size:.85rem;font-weight:600;cursor:pointer" onclick="App.gastosSwitchTab('list')">📋 Mis gastos hoy</button>
+    </div>
+    <div id="gastos-section-form">
+      <div class="form-group">
+        <label class="form-label">Monto *</label>
+        <input type="number" class="form-input" id="gasto-monto" placeholder="0.00" step="0.01" min="0.01">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Categoría *</label>
+        <select class="form-select" id="gasto-categoria"><option value="">Cargando categorías...</option></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Método de pago *</label>
+        <select class="form-select" id="gasto-metodo">
+          <option value="">Selecciona...</option>
+          <option value="Efectivo">💵 Efectivo</option>
+          <option value="Transferencia">🏦 Transferencia</option>
+          <option value="Tarjeta">💳 Tarjeta</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Descripción *</label>
+        <input type="text" class="form-input" id="gasto-descripcion" placeholder="Ej: Aceite para cocina" maxlength="120">
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="App.closeGastos()">Cancelar</button>
+        <button class="btn btn-primary btn-lg" id="gasto-save-btn" onclick="App.saveGasto()">Registrar Gasto</button>
+      </div>
+    </div>
+    <div id="gastos-section-list" style="display:none">
+      <div id="gastos-list-body" style="max-height:55vh;overflow-y:auto"></div>
     </div>
   </div>
 </div>
@@ -853,7 +898,7 @@ function _escpos(lines){
 // ─────────────────────────────────────────────────────────────────────────────
 
 const App=(()=>{
-  let cart=[],payMethod='cash',pinBuf='',filterCat='all',clockTimer=null,cajeraName='',db=null,commEmpSelected='';
+  let cart=[],payMethod='cash',pinBuf='',filterCat='all',clockTimer=null,cajeraName='',db=null,commEmpSelected='',gastosDb=null;
   const cache={products:[],categories:[],settings:{},orderNumber:1};
   const DEF_CATS=[{id:'burgers',name:'Hamburguesas',emoji:'🍔'},{id:'drinks',name:'Bebidas',emoji:'🥤'},{id:'sides',name:'Acompañantes',emoji:'🍟'},{id:'otros',name:'Otros',emoji:'🍽️'},{id:'personal',name:'Personal',emoji:'👨‍🍳'}];
   const DEF_INV=[{id:'carne-res',name:'Carne de Res',emoji:'🥩',unit:'kg',qty:10,minQty:2},{id:'carne-cerdo',name:'Carne de Cerdo',emoji:'🐷',unit:'kg',qty:10,minQty:2},{id:'pan',name:'Pan de Hamburguesa',emoji:'🍞',unit:'piezas',qty:50,minQty:10},{id:'bebidas',name:'Bebidas',emoji:'🥤',unit:'unidades',qty:30,minQty:5}];
@@ -875,6 +920,8 @@ const App=(()=>{
     if(!cfgStr){showScreen('screen-setup');return;}
     try{firebase.initializeApp(JSON.parse(cfgStr));}catch(e){showScreen('screen-setup');return;}
     db=firebase.database();
+    const GASTOS_CFG={apiKey:"AIzaSyDMKl8VBu9AV2k4PrXlCz8gS6J5m10vluk",authDomain:"sistema-de-gastos-6a91d.firebaseapp.com",projectId:"sistema-de-gastos-6a91d",storageBucket:"sistema-de-gastos-6a91d.firebasestorage.app",messagingSenderId:"155599396111",appId:"1:155599396111:web:6481a3fc8d5ccfb7cbf27a"};
+    try{if(!firebase.apps.find(a=>a.name==='gastosApp'))firebase.initializeApp(GASTOS_CFG,'gastosApp');gastosDb=firebase.app('gastosApp').firestore();}catch(e){console.warn('Gastos Firestore no disponible',e);}
     const isLocalhost=['localhost','127.0.0.1'].includes(location.hostname);
     const usingHardcoded=!localStorage.getItem('fb_config');
     if(isLocalhost&&usingHardcoded){const w=document.createElement('div');w.style.cssText='position:fixed;top:0;left:0;right:0;z-index:9999;background:#c0392b;color:#fff;text-align:center;padding:8px 12px;font-weight:700;font-size:.9rem';w.textContent='⚠️ LOCALHOST CONECTADO A FIREBASE DE PRODUCCIÓN — cualquier cambio afecta datos reales';document.body.appendChild(w);}
@@ -952,6 +999,76 @@ const App=(()=>{
     tick();clockTimer=setInterval(tick,1000);
     renderCatsBar();renderProducts();renderCart();
   }
+
+  // ── GASTOS ──────────────────────────────────────────────────────
+  function openGastos(){
+    if(!gastosDb){toast('Sistema de gastos no disponible','error');return;}
+    gastosLoadCategories();
+    gastosSwitchTab('form');
+    $('modal-gastos').classList.add('show');
+  }
+  function closeGastos(){$('modal-gastos').classList.remove('show');}
+  function gastosSwitchTab(tab){
+    const isForm=tab==='form';
+    $('gastos-section-form').style.display=isForm?'':'none';
+    $('gastos-section-list').style.display=isForm?'none':'';
+    const bf=$('gastos-tab-form'),bl=$('gastos-tab-list');
+    if(bf){bf.style.background=isForm?'var(--primary)':'var(--light)';bf.style.color=isForm?'white':'#666';bf.style.border=isForm?'none':'1px solid #e0e0e0';}
+    if(bl){bl.style.background=isForm?'var(--light)':'var(--primary)';bl.style.color=isForm?'#666':'white';bl.style.border=isForm?'1px solid #e0e0e0':'none';}
+    if(!isForm)gastosLoadList();
+  }
+  async function gastosLoadCategories(){
+    const sel=$('gasto-categoria');
+    if(!sel||!gastosDb)return;
+    try{
+      const snap=await gastosDb.collection('categorias').orderBy('orden').get();
+      const cats=snap.docs.map(d=>d.data().nombre);
+      sel.innerHTML='<option value="">Selecciona categoría...</option>'+cats.map(c=>`<option value="${c}">${c}</option>`).join('');
+    }catch(e){sel.innerHTML='<option value="">Error al cargar</option>';console.warn(e);}
+  }
+  async function saveGasto(){
+    const monto=parseFloat($('gasto-monto')?.value||'0');
+    const categoria=$('gasto-categoria')?.value||'';
+    const metodoPago=$('gasto-metodo')?.value||'';
+    const descripcion=($('gasto-descripcion')?.value||'').trim();
+    if(!monto||monto<=0)return toast('Ingresa un monto mayor a $0','error');
+    if(!categoria)return toast('Selecciona una categoría','error');
+    if(!metodoPago)return toast('Selecciona el método de pago','error');
+    if(!descripcion)return toast('Ingresa una descripción','error');
+    const now=new Date();
+    const fecha=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    const btn=$('gasto-save-btn');
+    if(btn){btn.disabled=true;btn.textContent='Guardando...';}
+    try{
+      await gastosDb.collection('gastos').add({
+        fecha,categoria,descripcion,monto,metodoPago,notas:'',
+        registradoPor:cajeraName||'cajera',
+        timestamp:firebase.firestore.FieldValue.serverTimestamp()
+      });
+      toast('Gasto registrado ✓');
+      $('gasto-monto').value='';$('gasto-categoria').value='';$('gasto-metodo').value='';$('gasto-descripcion').value='';
+      gastosSwitchTab('list');
+    }catch(e){toast('Error al guardar gasto','error');console.error(e);}
+    finally{if(btn){btn.disabled=false;btn.textContent='Registrar Gasto';}}
+  }
+  async function gastosLoadList(){
+    const body=$('gastos-list-body');
+    if(!body||!gastosDb)return;
+    body.innerHTML='<div style="text-align:center;padding:20px;color:#aaa">Cargando...</div>';
+    try{
+      const now=new Date();
+      const fecha=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+      const snap=await gastosDb.collection('gastos').where('fecha','==',fecha).get();
+      const items=snap.docs.map(d=>({id:d.id,...d.data()}))
+        .filter(g=>g.registradoPor===(cajeraName||'cajera'))
+        .sort((a,b)=>(b.timestamp?.seconds||0)-(a.timestamp?.seconds||0));
+      if(!items.length){body.innerHTML='<div style="text-align:center;padding:20px;color:#aaa">No has registrado gastos hoy</div>';return;}
+      const total=items.reduce((s,g)=>s+(g.monto||0),0);
+      body.innerHTML=`<div style="background:#fff8f0;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:.85rem;color:var(--primary);font-weight:700">Total hoy: $${total.toFixed(2)} · ${items.length} registro(s)</div>`
+        +items.map(g=>`<div style="background:white;border-radius:8px;padding:10px 12px;margin-bottom:8px;border:1px solid #eee"><div style="display:flex;justify-content:space-between;align-items:start"><div><div style="font-weight:700;font-size:.9rem">${g.descripcion||'—'}</div><div style="font-size:.78rem;color:#999;margin-top:2px">${g.categoria||'—'} · ${g.metodoPago||'—'}</div></div><div style="font-weight:800;color:var(--primary);white-space:nowrap">$${(g.monto||0).toFixed(2)}</div></div></div>`).join('');
+    }catch(e){body.innerHTML='<div style="text-align:center;padding:20px;color:#e74c3c">Error al cargar</div>';console.error(e);}
+  }
+  // ── FIN GASTOS ───────────────────────────────────────────────────
 
   function showPin(){$('modal-pin').classList.add('show');pinBuf='';updatePinDots();}
   function closePin(){$('modal-pin').classList.remove('show');pinBuf='';}
@@ -1574,7 +1691,7 @@ ${p.detalle}
       {type:'center',text:'¡Listo para imprimir!'},
     ])).then(()=>toast('Prueba enviada'));
   }
-  return{init,saveFirebaseConfig,resetFirebase,loginCajera,confirmCajera,closeModalCajera,logout,showPin,closePin,pinKey,pinDel,pinEnter,setFilterCat,renderProducts,addToCart,changeQty,clearCart,openCheckout,closeCheckout,selPay,calcChange,calcDiscount,applyPromo,setDiscType,completeSale,openMiHistorial,closeMiHistorial,openCorte,closeCorte,printCorte,openPrinterModal,closePrinterModal,forceUpdate,goTab,saveProduct,editProduct,cancelEdit,deleteProd,toggleProd,renderProdTable,addCat,delCat,renderSales,reprint,clearSales,exportCSV,saveSettings,switchTab,savePromo,deletePromo,renderPromosList,btConnect,btDisconnect,btTest,renderInventory,addInvItem,deleteInvItem,adjustStock,saveInvQty,startInvEdit,cancelInvEdit,saveInvEdit,openInvEmojiPicker,reloadInventory,loadInvLog,clearInvLog,sendTestEmail,sendStockAlert,addRecipeRow,removeRecipeRow,renderRecipe,sendDailyReport,previewReport,addEmpleado,removeEmpleado,updateEmpleado,onCommEmpChange};
+  return{init,saveFirebaseConfig,resetFirebase,loginCajera,confirmCajera,closeModalCajera,logout,showPin,closePin,pinKey,pinDel,pinEnter,setFilterCat,renderProducts,addToCart,changeQty,clearCart,openCheckout,closeCheckout,selPay,calcChange,calcDiscount,applyPromo,setDiscType,completeSale,openMiHistorial,closeMiHistorial,openCorte,closeCorte,printCorte,openPrinterModal,closePrinterModal,forceUpdate,goTab,saveProduct,editProduct,cancelEdit,deleteProd,toggleProd,renderProdTable,addCat,delCat,renderSales,reprint,clearSales,exportCSV,saveSettings,switchTab,savePromo,deletePromo,renderPromosList,btConnect,btDisconnect,btTest,renderInventory,addInvItem,deleteInvItem,adjustStock,saveInvQty,startInvEdit,cancelInvEdit,saveInvEdit,openInvEmojiPicker,reloadInventory,loadInvLog,clearInvLog,sendTestEmail,sendStockAlert,addRecipeRow,removeRecipeRow,renderRecipe,sendDailyReport,previewReport,addEmpleado,removeEmpleado,updateEmpleado,onCommEmpChange,openGastos,closeGastos,gastosSwitchTab,saveGasto};
 })();
 document.addEventListener('DOMContentLoaded',()=>App.init());
 </script>

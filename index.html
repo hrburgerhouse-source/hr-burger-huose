@@ -549,9 +549,11 @@ textarea.form-input{height:130px;resize:vertical;font-family:monospace;font-size
       <div id="corte-efectivo-esperado" style="display:none;margin-top:8px;padding-top:8px;border-top:1px solid #e8cfa0"></div>
     </div>
     <div class="corte-sales-list" id="corte-sales-list"></div>
+    <div id="corte-ingresos-confirm" style="display:none;margin:0 0 8px;background:#f0faf4;border:1px solid #a8d5b5;border-radius:10px;padding:10px 14px"></div>
     <div class="corte-actions">
       <button class="btn btn-corte-print" onclick="App.printCorte()">🖨️ Imprimir Corte</button>
       <button class="btn btn-primary" onclick="App.sendDailyReport(true)">📧 Enviar reporte</button>
+      <button class="btn btn-success" id="corte-confirm-btn" onclick="App.confirmarCorte()" style="font-weight:700">✅ Enviar ingresos al sistema</button>
       <button class="btn btn-outline" onclick="App.closeCorte()">Cerrar</button>
     </div>
   </div>
@@ -1087,6 +1089,67 @@ const App=(()=>{
         +items.map(g=>`<div style="background:white;border-radius:8px;padding:10px 12px;margin-bottom:8px;border:1px solid #eee"><div style="display:flex;justify-content:space-between;align-items:start"><div><div style="font-weight:700;font-size:.9rem">${g.descripcion||'—'}</div><div style="font-size:.78rem;color:#999;margin-top:2px">${g.categoria||'—'} · ${g.metodoPago||'—'}</div></div><div style="font-weight:800;color:var(--primary);white-space:nowrap">$${(g.monto||0).toFixed(2)}</div></div></div>`).join('');
     }catch(e){body.innerHTML='<div style="text-align:center;padding:20px;color:#e74c3c">Error al cargar</div>';console.error(e);}
   }
+  // ── CONFIRMAR CORTE → INGRESOS ──────────────────────────────────
+  async function confirmarCorte(){
+    if(!gastosDb){toast('Sistema de gastos no disponible','error');return;}
+    const cBtn=$('corte-confirm-btn');
+    if(cBtn){cBtn.disabled=true;cBtn.textContent='Registrando...';}
+    try{
+      const today=localDate();
+      const sales=await getSales(today);
+      const byPay={cash:0,card:0,transfer:0};
+      sales.filter(s=>s.pay!=='personal').forEach(s=>{
+        if(s.pay==='cash')byPay.cash=+(byPay.cash+(s.total||0)).toFixed(2);
+        else if(s.pay==='card')byPay.card=+(byPay.card+(s.total||0)).toFixed(2);
+        else if(s.pay==='transfer')byPay.transfer=+(byPay.transfer+(s.total||0)).toFixed(2);
+      });
+      if(!byPay.cash&&!byPay.card&&!byPay.transfer){
+        toast('Sin ventas cobradas para registrar','error');
+        if(cBtn){cBtn.disabled=false;cBtn.textContent='✅ Enviar ingresos al sistema';}
+        return;
+      }
+      const COMISION=0.0274;
+      const tarjetaComision=+(byPay.card*COMISION).toFixed(2);
+      const tarjetaNeto=+(byPay.card-tarjetaComision).toFixed(2);
+      const totalNeto=+(byPay.cash+byPay.transfer+tarjetaNeto).toFixed(2);
+      const metodos=[];
+      if(byPay.cash>0)metodos.push('Efectivo');
+      if(byPay.transfer>0)metodos.push('Transferencia');
+      if(byPay.card>0)metodos.push('Tarjeta');
+      const docId='pos-'+today;
+      await gastosDb.collection('ingresos').doc(docId).set({
+        fecha:today,
+        categoria:'Ventas del día',
+        descripcion:'Ventas del día — '+(getCfg().name||'HR Burger House'),
+        monto:totalNeto,
+        montoEfectivo:byPay.cash,
+        montoTransferencia:byPay.transfer,
+        montoTarjetaBruto:byPay.card,
+        montoTarjetaComision:tarjetaComision,
+        montoTarjeta:tarjetaNeto,
+        metodoPago:metodos.join(', ')||'Efectivo',
+        notas:'Registrado automáticamente desde POS',
+        registradoPor:'pos-corte',
+        origen:'pos-corte',
+        timestamp:firebase.firestore.FieldValue.serverTimestamp()
+      });
+      const confEl=$('corte-ingresos-confirm');
+      if(confEl){
+        const lines=[];
+        if(byPay.cash>0)lines.push(`💵 Efectivo: ${fmt(byPay.cash)}`);
+        if(byPay.transfer>0)lines.push(`🏦 Transferencia: ${fmt(byPay.transfer)}`);
+        if(byPay.card>0)lines.push(`💳 Tarjeta: bruto ${fmt(byPay.card)} → neto ${fmt(tarjetaNeto)} (comisión -${fmt(tarjetaComision)})`);
+        lines.push(`Total neto registrado: ${fmt(totalNeto)}`);
+        confEl.style.display='block';
+        confEl.innerHTML=`<div style="font-size:.78rem;color:#27ae60;font-weight:700;margin-bottom:5px">✅ Ingresos enviados al sistema de gastos</div><div style="font-size:.78rem;color:#555;margin-bottom:4px">ID: ${docId} (se actualiza si abres el corte de nuevo)</div>`+lines.map(l=>`<div style="font-size:.83rem;color:#333;padding:1px 0">${l}</div>`).join('');
+      }
+      if(cBtn){cBtn.textContent='✅ Ingresos enviados';cBtn.disabled=true;}
+    }catch(e){
+      console.error(e);
+      toast('Error al registrar ingresos en el sistema de gastos','error');
+      if(cBtn){cBtn.disabled=false;cBtn.textContent='✅ Enviar ingresos al sistema';}
+    }
+  }
   // ── FIN GASTOS ───────────────────────────────────────────────────
 
   function showPin(){$('modal-pin').classList.add('show');pinBuf='';updatePinDots();}
@@ -1227,6 +1290,9 @@ const App=(()=>{
   function closeMiHistorial(){$('modal-mi-historial').classList.remove('show');}
   async function openCorte(){
     $('modal-corte').classList.add('show');
+    const confEl=$('corte-ingresos-confirm'),cBtn=$('corte-confirm-btn');
+    if(confEl)confEl.style.display='none';
+    if(cBtn){cBtn.disabled=false;cBtn.textContent='✅ Enviar ingresos al sistema';}
     const cfg=getCfg();
     if($('corte-cajera'))$('corte-cajera').textContent=cajeraName||'—';
     if($('corte-fecha'))$('corte-fecha').textContent=new Date().toLocaleDateString('es-MX',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
@@ -1750,7 +1816,7 @@ ${p.detalle}
       {type:'center',text:'¡Listo para imprimir!'},
     ])).then(()=>toast('Prueba enviada'));
   }
-  return{init,saveFirebaseConfig,resetFirebase,loginCajera,confirmCajera,closeModalCajera,logout,showPin,closePin,pinKey,pinDel,pinEnter,setFilterCat,renderProducts,addToCart,changeQty,clearCart,openCheckout,closeCheckout,selPay,calcChange,calcDiscount,applyPromo,setDiscType,completeSale,openMiHistorial,closeMiHistorial,openCorte,closeCorte,printCorte,openPrinterModal,closePrinterModal,forceUpdate,goTab,saveProduct,editProduct,cancelEdit,deleteProd,toggleProd,renderProdTable,addCat,delCat,renderSales,reprint,clearSales,exportCSV,saveSettings,switchTab,savePromo,deletePromo,renderPromosList,btConnect,btDisconnect,btTest,renderInventory,addInvItem,deleteInvItem,adjustStock,saveInvQty,startInvEdit,cancelInvEdit,saveInvEdit,openInvEmojiPicker,reloadInventory,loadInvLog,clearInvLog,sendTestEmail,sendStockAlert,addRecipeRow,removeRecipeRow,renderRecipe,sendDailyReport,previewReport,addEmpleado,removeEmpleado,updateEmpleado,onCommEmpChange,openGastos,closeGastos,gastosSwitchTab,saveGasto};
+  return{init,saveFirebaseConfig,resetFirebase,loginCajera,confirmCajera,closeModalCajera,logout,showPin,closePin,pinKey,pinDel,pinEnter,setFilterCat,renderProducts,addToCart,changeQty,clearCart,openCheckout,closeCheckout,selPay,calcChange,calcDiscount,applyPromo,setDiscType,completeSale,openMiHistorial,closeMiHistorial,openCorte,closeCorte,printCorte,openPrinterModal,closePrinterModal,forceUpdate,goTab,saveProduct,editProduct,cancelEdit,deleteProd,toggleProd,renderProdTable,addCat,delCat,renderSales,reprint,clearSales,exportCSV,saveSettings,switchTab,savePromo,deletePromo,renderPromosList,btConnect,btDisconnect,btTest,renderInventory,addInvItem,deleteInvItem,adjustStock,saveInvQty,startInvEdit,cancelInvEdit,saveInvEdit,openInvEmojiPicker,reloadInventory,loadInvLog,clearInvLog,sendTestEmail,sendStockAlert,addRecipeRow,removeRecipeRow,renderRecipe,sendDailyReport,previewReport,addEmpleado,removeEmpleado,updateEmpleado,onCommEmpChange,openGastos,closeGastos,gastosSwitchTab,saveGasto,confirmarCorte};
 })();
 document.addEventListener('DOMContentLoaded',()=>App.init());
 </script>

@@ -543,6 +543,11 @@ textarea.form-input{height:130px;resize:vertical;font-family:monospace;font-size
       <div style="font-size:.78rem;color:#b8860b;font-weight:700;margin-bottom:6px">💰 COMISIONES A PAGAR</div>
       <div id="corte-comisiones-body"></div>
     </div>
+    <div id="corte-gastos-section" style="display:none;margin:0 0 8px;background:#fdf6ee;border:1px solid #e8cfa0;border-radius:10px;padding:10px 14px">
+      <div style="font-size:.78rem;color:#8b5e0f;font-weight:700;margin-bottom:6px">💸 GASTOS DEL DÍA</div>
+      <div id="corte-gastos-body"></div>
+      <div id="corte-efectivo-esperado" style="display:none;margin-top:8px;padding-top:8px;border-top:1px solid #e8cfa0"></div>
+    </div>
     <div class="corte-sales-list" id="corte-sales-list"></div>
     <div class="corte-actions">
       <button class="btn btn-corte-print" onclick="App.printCorte()">🖨️ Imprimir Corte</button>
@@ -924,7 +929,21 @@ const App=(()=>{
     try{if(!firebase.apps.find(a=>a.name==='gastosApp'))firebase.initializeApp(GASTOS_CFG,'gastosApp');gastosDb=firebase.app('gastosApp').firestore();}catch(e){console.warn('Gastos Firestore no disponible',e);}
     const isLocalhost=['localhost','127.0.0.1'].includes(location.hostname);
     const usingHardcoded=!localStorage.getItem('fb_config');
-    if(isLocalhost&&usingHardcoded){const w=document.createElement('div');w.style.cssText='position:fixed;top:0;left:0;right:0;z-index:9999;background:#c0392b;color:#fff;text-align:center;padding:8px 12px;font-weight:700;font-size:.9rem';w.textContent='⚠️ LOCALHOST CONECTADO A FIREBASE DE PRODUCCIÓN — cualquier cambio afecta datos reales';document.body.appendChild(w);}
+    if(isLocalhost&&usingHardcoded){
+      const w=document.createElement('div');
+      w.id='localhost-banner';
+      w.style.cssText='position:fixed;top:0;left:0;right:0;z-index:9999;background:#c0392b;color:#fff;display:flex;align-items:center;justify-content:center;padding:3px 36px;font-weight:600;font-size:.75rem;line-height:1.5';
+      const txt=document.createElement('span');
+      txt.textContent='⚠️ LOCALHOST → FIREBASE DE PRODUCCIÓN — cambios afectan datos reales';
+      const btn=document.createElement('button');
+      btn.textContent='✕';
+      btn.title='Ocultar';
+      btn.style.cssText='position:absolute;right:8px;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.25);border:none;color:white;width:20px;height:20px;border-radius:50%;cursor:pointer;font-size:.7rem;line-height:1;padding:0';
+      btn.onclick=()=>{w.remove();document.body.style.paddingTop='';};
+      w.appendChild(txt);w.appendChild(btn);
+      document.body.prepend(w);
+      document.body.style.paddingTop='28px';
+    }
     showScreen('screen-loading');
     await seedAndListen();
     embedLogo();
@@ -1240,6 +1259,36 @@ const App=(()=>{
     const sl=$('corte-sales-list');
     const payIcon={cash:'💵',card:'💳',transfer:'📲',personal:'👨‍🍳'};
     if(sl)sl.innerHTML=sales.length?sales.map(s=>`<div class="corte-sale-row"><span class="corte-sale-num">#${String(s.orderN).padStart(3,'0')}</span><span class="corte-sale-time">${new Date(s.date).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})}</span><span class="corte-sale-pay">${payIcon[s.pay]||'💵'}</span><span class="corte-sale-total">${s.pay==='personal'?'—':fmt(s.total)}</span></div>`).join(''):'<div class="empty-table">Sin ventas hoy</div>';
+    const gsec=$('corte-gastos-section'),gbody=$('corte-gastos-body'),gefect=$('corte-efectivo-esperado');
+    if(gsec)gsec.style.display='none';
+    if(gastosDb&&gsec&&gbody){
+      try{
+        const gsnap=await gastosDb.collection('gastos').where('fecha','==',today).get();
+        const todayG=gsnap.docs.map(d=>({id:d.id,...d.data()}));
+        if(todayG.length){
+          const gEfec=todayG.filter(g=>g.metodoPago==='Efectivo');
+          const gOtros=todayG.filter(g=>g.metodoPago!=='Efectivo');
+          const totEfec=gEfec.reduce((s,g)=>s+(g.monto||0),0);
+          gsec.style.display='block';
+          let gh='';
+          if(gEfec.length){
+            gh+=`<div style="font-size:.78rem;font-weight:600;color:#7a4a0a;margin-bottom:4px">💵 En efectivo (se restan del efectivo en caja)</div>`;
+            gh+=gEfec.map(g=>`<div style="display:flex;justify-content:space-between;font-size:.83rem;padding:2px 0"><span>${g.descripcion||'—'} <span style="color:#aaa;font-size:.76rem">${g.registradoPor||''}</span></span><span style="font-weight:700;color:#c0392b">-${fmt(g.monto)}</span></div>`).join('');
+            if(gEfec.length>1)gh+=`<div style="display:flex;justify-content:space-between;font-size:.83rem;padding:4px 0 0;border-top:1px solid #e8cfa0;margin-top:4px;font-weight:700"><span>Total gastos efectivo</span><span style="color:#c0392b">-${fmt(totEfec)}</span></div>`;
+          }
+          if(gOtros.length){
+            gh+=`<div style="font-size:.78rem;font-weight:600;color:#666;margin:${gEfec.length?'10':'0'}px 0 4px">ℹ️ Otros gastos (informativos, no afectan efectivo)</div>`;
+            gh+=gOtros.map(g=>`<div style="display:flex;justify-content:space-between;font-size:.83rem;padding:2px 0;color:#555"><span>${g.descripcion||'—'} <span style="font-size:.76rem;color:#aaa">(${g.metodoPago||'—'})</span></span><span style="font-weight:600">${fmt(g.monto)}</span></div>`).join('');
+          }
+          gbody.innerHTML=gh;
+          if(gEfec.length&&gefect){
+            const efecEsp=byPay.cash-totEfec;
+            gefect.style.display='block';
+            gefect.innerHTML=`<div style="display:flex;justify-content:space-between;font-size:.82rem;padding:2px 0;color:#666"><span>Ventas en efectivo</span><span>${fmt(byPay.cash)}</span></div><div style="display:flex;justify-content:space-between;font-size:.82rem;padding:2px 0;color:#c0392b"><span>− Gastos en efectivo</span><span>-${fmt(totEfec)}</span></div><div style="display:flex;justify-content:space-between;font-size:.86rem;padding:5px 0 0;border-top:1px solid #e8cfa0;margin-top:4px;font-weight:800"><span>💵 Efectivo esperado en caja</span><span style="color:${efecEsp>=0?'#27ae60':'#c0392b'}">${fmt(efecEsp)}</span></div>`;
+          }
+        }
+      }catch(e){console.warn('Gastos corte no disponibles',e);}
+    }
   }
   function closeCorte(){$('modal-corte').classList.remove('show');}
   async function printCorte(){
@@ -1266,8 +1315,9 @@ const App=(()=>{
       {type:'row',bold:true,left:'TOTAL ('+cobradas.length+' ventas)',right:fmt(totalCobrado)},
       {type:'row',left:'Promedio por venta',right:fmt(cobradas.length?totalCobrado/cobradas.length:0)},
       {type:'hr'},
-      {type:'center',text:new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})},
     ];
+    if(gastosDb){try{const gsnap=await gastosDb.collection('gastos').where('fecha','==',today).get();const gEfec=gsnap.docs.map(d=>d.data()).filter(g=>g.metodoPago==='Efectivo');if(gEfec.length){const totEfec=gEfec.reduce((s,g)=>s+(g.monto||0),0);lines.push({type:'center',text:'-- GASTOS EFECTIVO --'});gEfec.forEach(g=>lines.push({type:'row',left:(g.descripcion||'Gasto').substring(0,16),right:'-'+fmt(g.monto)}));lines.push({type:'hr'});lines.push({type:'row',bold:true,left:'EFECTIVO EN CAJA',right:fmt(byPay.cash-totEfec)});lines.push({type:'hr'});}}catch(e){}}
+    lines.push({type:'center',text:new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})});
     const ok=await BTPrinter.send(_escpos(lines));
     if(ok)toast('Corte enviado a la impresora');else toast('Error al imprimir','error');
   }
@@ -1597,7 +1647,9 @@ const App=(()=>{
     sales.forEach(s=>{if(s.commEmp&&s.totalCommission>0){commByEmpRpt[s.commEmp]=(commByEmpRpt[s.commEmp]||0)+s.totalCommission;}});
     const totalComisiones=Object.values(commByEmpRpt).reduce((a,b)=>a+b,0);
     const detalleComisiones=Object.entries(commByEmpRpt).length?Object.entries(commByEmpRpt).map(([emp,amt])=>emp+': $'+amt.toFixed(2)).join('\n'):'Sin comisiones a pagar.';
-    return{fecha:today,hora:now.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}),total_ventas:totalVentas,total_ingresos:totalIngresos.toFixed(2),efectivo:efectivo.toFixed(2),tarjeta:tarjeta.toFixed(2),transferencia:transferencia.toFixed(2),personal:personal.toFixed(2),detalle,total_comisiones:totalComisiones.toFixed(2),detalle_comisiones:detalleComisiones};
+    let gastos_efectivo='0.00',efectivo_esperado=efectivo.toFixed(2),detalle_gastos='Sin gastos registrados hoy.';
+    if(gastosDb){try{const gsnap=await gastosDb.collection('gastos').where('fecha','==',today).get();const todayG=gsnap.docs.map(d=>d.data());const gEfec=todayG.filter(g=>g.metodoPago==='Efectivo');if(gEfec.length){const totEfec=gEfec.reduce((s,g)=>s+(g.monto||0),0);gastos_efectivo=totEfec.toFixed(2);efectivo_esperado=(efectivo-totEfec).toFixed(2);detalle_gastos=gEfec.map(g=>'  • '+(g.descripcion||'Gasto')+': -$'+(g.monto||0).toFixed(2)+' ('+(g.registradoPor||'cajera')+')').join('\n');}const gOtros=todayG.filter(g=>g.metodoPago!=='Efectivo');if(gOtros.length)detalle_gastos+=(gEfec.length?'\nOtros gastos (informativos):\n':'\nOtros gastos (informativos):\n')+gOtros.map(g=>'  • '+(g.descripcion||'Gasto')+': $'+(g.monto||0).toFixed(2)+' ('+(g.metodoPago||'—')+')').join('\n');}catch(e){}}
+    return{fecha:today,hora:now.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}),total_ventas:totalVentas,total_ingresos:totalIngresos.toFixed(2),efectivo:efectivo.toFixed(2),tarjeta:tarjeta.toFixed(2),transferencia:transferencia.toFixed(2),personal:personal.toFixed(2),detalle,total_comisiones:totalComisiones.toFixed(2),detalle_comisiones:detalleComisiones,gastos_efectivo,efectivo_esperado,detalle_gastos};
   }
   async function previewReport(){
     const dateEl=document.getElementById('sales-date');
@@ -1617,6 +1669,13 @@ Total ingresos:     $${p.total_ingresos}
 💳 Tarjeta:         $${p.tarjeta}
 📲 Transferencia:   $${p.transferencia}
 👨‍🍳 Comida Empleado: $${p.personal}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+GASTOS DEL DÍA
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+💸 Gastos efectivo: $${p.gastos_efectivo}
+💵 Efectivo esperado en caja: $${p.efectivo_esperado}
+${p.detalle_gastos}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 COMISIONES A PAGAR

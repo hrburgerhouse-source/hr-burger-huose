@@ -818,6 +818,17 @@ textarea.form-input{height:130px;resize:vertical;font-family:monospace;font-size
   </div>
 </div>
 <!-- EDIT GASTO MODAL -->
+<div id="modal-del-gasto" class="modal-overlay">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-title" style="color:var(--danger)">🗑️ Eliminar gasto</div>
+    <div id="del-gasto-corte-warn" style="display:none;background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:.85rem;color:#856404">⚠️ Este día ya tiene corte confirmado. El efectivo esperado del corte <b>no se recalcula</b>.</div>
+    <div id="del-gasto-detalle" style="background:#f8f9fa;border-radius:10px;padding:14px 16px;margin-bottom:20px;font-size:.9rem;line-height:1.8"></div>
+    <div class="modal-actions" style="gap:12px">
+      <button class="btn btn-outline" style="flex:1;padding:14px;font-size:1rem" onclick="App.closeDelGasto()">Cancelar</button>
+      <button class="btn btn-danger" style="flex:1;padding:14px;font-size:1rem" id="del-gasto-confirm-btn" onclick="App.confirmarDelGasto()">Sí, eliminar</button>
+    </div>
+  </div>
+</div>
 <div id="modal-edit-gasto" class="modal-overlay">
   <div class="modal" style="max-width:440px">
     <div class="modal-title">✏️ Editar Gasto</div>
@@ -1226,22 +1237,39 @@ const App=(()=>{
     }catch(e){toast('Error al guardar','error');console.error(e);}
     finally{if(btn){btn.disabled=false;btn.textContent='💾 Guardar cambios';}}
   }
+  let _delGastoId=null;
   async function deleteAdminGasto(id,fecha){
     if(!gastosDb)return;
     try{
+      const doc=await gastosDb.collection('gastos').doc(id).get();
+      if(!doc.exists){toast('Gasto no encontrado','error');return;}
+      const g=doc.data();
+      _delGastoId=id;
       const corteDoc=await gastosDb.collection('ingresos').doc('pos-'+(fecha||'')).get();
-      if(corteDoc.exists){
-        const ok=await showConfirm('Este día ya tiene corte confirmado. El efectivo esperado del corte no se recalcula. ¿Continuar?');
-        if(!ok)return;
-      }
-    }catch(e){}
-    const typed=window.prompt('Escribe ELIMINAR (en mayúsculas) para confirmar:');
-    if(typed!=='ELIMINAR'){toast('Cancelado — escribe exactamente ELIMINAR','error');return;}
+      $('del-gasto-corte-warn').style.display=corteDoc.exists?'block':'none';
+      const [yy,mm,dd]=(g.fecha||fecha||'').split('-');
+      const fechaFmt=dd&&mm&&yy?dd+'/'+mm+'/'+yy:(g.fecha||fecha||'—');
+      $('del-gasto-detalle').innerHTML=
+        '<div><b>Descripción:</b> '+(g.descripcion||'—')+'</div>'
+        +'<div><b>Cajera:</b> '+(g.registradoPor||'—')+'</div>'
+        +'<div><b>Fecha:</b> '+fechaFmt+'</div>'
+        +'<div><b>Monto:</b> <span style="color:var(--danger);font-weight:800">'+fmt(g.monto||0)+'</span></div>'
+        +'<div><b>Categoría:</b> '+(g.categoria||'—')+' · '+(g.metodoPago||'—')+'</div>';
+      $('modal-del-gasto').classList.add('show');
+    }catch(e){toast('Error al cargar gasto','error');console.error(e);}
+  }
+  function closeDelGasto(){$('modal-del-gasto').classList.remove('show');_delGastoId=null;}
+  async function confirmarDelGasto(){
+    if(!_delGastoId||!gastosDb)return;
+    const btn=$('del-gasto-confirm-btn');
+    if(btn){btn.disabled=true;btn.textContent='Eliminando...';}
     try{
-      await gastosDb.collection('gastos').doc(id).delete();
+      await gastosDb.collection('gastos').doc(_delGastoId).delete();
+      closeDelGasto();
       toast('Gasto eliminado','error');
       renderAdminGastos();
     }catch(e){toast('Error al eliminar','error');console.error(e);}
+    finally{if(btn){btn.disabled=false;btn.textContent='Sí, eliminar';}}
   }
   // ── CONFIRMAR CORTE → INGRESOS ──────────────────────────────────
   async function confirmarCorte(){
@@ -2012,7 +2040,7 @@ const App=(()=>{
       {type:'center',text:'¡Listo para imprimir!'},
     ])).then(()=>toast('Prueba enviada'));
   }
-  return{init,saveFirebaseConfig,resetFirebase,loginCajera,confirmCajera,closeModalCajera,logout,showPin,closePin,pinKey,pinDel,pinEnter,setFilterCat,renderProducts,addToCart,changeQty,clearCart,openCheckout,closeCheckout,selPay,calcChange,calcDiscount,applyPromo,setDiscType,completeSale,openMiHistorial,closeMiHistorial,openCorte,closeCorte,printCorte,openPrinterModal,closePrinterModal,forceUpdate,goTab,saveProduct,editProduct,cancelEdit,deleteProd,toggleProd,renderProdTable,addCat,delCat,renderSales,reprint,clearSales,exportCSV,saveSettings,switchTab,savePromo,deletePromo,renderPromosList,btConnect,btDisconnect,btTest,renderInventory,addInvItem,deleteInvItem,adjustStock,saveInvQty,startInvEdit,cancelInvEdit,saveInvEdit,openInvEmojiPicker,reloadInventory,loadInvLog,clearInvLog,sendTestEmail,sendStockAlert,addRecipeRow,removeRecipeRow,renderRecipe,sendDailyReport,previewReport,addEmpleado,removeEmpleado,updateEmpleado,onCommEmpChange,openGastos,closeGastos,gastosSwitchTab,saveGasto,sendTestReport,confirmarCorte,renderAdminGastos,openEditGasto,closeEditGasto,guardarEditGasto,deleteAdminGasto};
+  return{init,saveFirebaseConfig,resetFirebase,loginCajera,confirmCajera,closeModalCajera,logout,showPin,closePin,pinKey,pinDel,pinEnter,setFilterCat,renderProducts,addToCart,changeQty,clearCart,openCheckout,closeCheckout,selPay,calcChange,calcDiscount,applyPromo,setDiscType,completeSale,openMiHistorial,closeMiHistorial,openCorte,closeCorte,printCorte,openPrinterModal,closePrinterModal,forceUpdate,goTab,saveProduct,editProduct,cancelEdit,deleteProd,toggleProd,renderProdTable,addCat,delCat,renderSales,reprint,clearSales,exportCSV,saveSettings,switchTab,savePromo,deletePromo,renderPromosList,btConnect,btDisconnect,btTest,renderInventory,addInvItem,deleteInvItem,adjustStock,saveInvQty,startInvEdit,cancelInvEdit,saveInvEdit,openInvEmojiPicker,reloadInventory,loadInvLog,clearInvLog,sendTestEmail,sendStockAlert,addRecipeRow,removeRecipeRow,renderRecipe,sendDailyReport,previewReport,addEmpleado,removeEmpleado,updateEmpleado,onCommEmpChange,openGastos,closeGastos,gastosSwitchTab,saveGasto,sendTestReport,confirmarCorte,renderAdminGastos,openEditGasto,closeEditGasto,guardarEditGasto,deleteAdminGasto,closeDelGasto,confirmarDelGasto};
 })();
 document.addEventListener('DOMContentLoaded',()=>App.init());
 </script>

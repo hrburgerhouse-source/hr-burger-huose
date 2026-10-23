@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <script>
 (function(){
-  var V='10';
+  var V='11';
   var stored=localStorage.getItem('hrb-v');
   if(stored&&stored!==V){
     localStorage.setItem('hrb-v',V);
@@ -570,6 +570,7 @@ textarea.form-input{height:130px;resize:vertical;font-family:monospace;font-size
     <button class="admin-tab" onclick="App.goTab('promos')">🏷️ Promociones</button>
     <button class="admin-tab" onclick="App.goTab('inventory')">📦 Inventario</button>
     <button class="admin-tab" onclick="App.goTab('sales')">📊 Ventas</button>
+    <button class="admin-tab" onclick="App.goTab('gastos')">💸 Gastos</button>
     <button class="admin-tab" onclick="App.goTab('settings')">⚙️ Ajustes</button>
   </div>
   <div class="admin-body">
@@ -713,6 +714,30 @@ textarea.form-input{height:130px;resize:vertical;font-family:monospace;font-size
         <div style="overflow-x:auto"><table class="sales-table"><thead><tr><th>#</th><th>Hora</th><th>Cajera</th><th>Productos</th><th>Pago</th><th>Total</th><th></th></tr></thead><tbody id="sales-tbody"></tbody></table></div>
       </div>
     </div>
+    <!-- GASTOS TAB -->
+    <div id="tab-gastos" style="display:none">
+      <div class="stats-row">
+        <div class="stat-card"><div class="stat-icon">💸</div><div class="stat-val" id="gst-total">$0</div><div class="stat-lbl">Total Gastos</div></div>
+        <div class="stat-card"><div class="stat-icon">🧾</div><div class="stat-val" id="gst-count">0</div><div class="stat-lbl">Registros</div></div>
+        <div class="stat-card"><div class="stat-icon">💵</div><div class="stat-val" id="gst-efectivo">$0</div><div class="stat-lbl">En Efectivo</div></div>
+      </div>
+      <div class="filter-bar">
+        <div class="filter-left" style="flex-wrap:wrap;gap:10px">
+          <span class="filter-label">Fecha:</span>
+          <input type="date" class="form-input" id="gastos-admin-date" style="width:auto" onchange="App.renderAdminGastos()">
+          <span class="filter-label">Cajera:</span>
+          <select class="form-input" id="gastos-admin-cajera" style="width:auto" onchange="App.renderAdminGastos()"><option value="">Todas</option></select>
+        </div>
+      </div>
+      <div class="table-card">
+        <div style="overflow-x:auto">
+          <table class="sales-table">
+            <thead><tr><th>Hora</th><th>Cajera</th><th>Descripción</th><th>Categoría</th><th>Método</th><th>Monto</th><th></th></tr></thead>
+            <tbody id="gastos-admin-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
     <!-- SETTINGS TAB -->
     <div id="tab-settings" style="display:none">
       <div class="form-card">
@@ -789,6 +814,28 @@ textarea.form-input{height:130px;resize:vertical;font-family:monospace;font-size
         </div>
         <div style="font-size:.75rem;color:#aaa;margin-top:10px;line-height:1.7">⚠️ Requiere Chrome en Android o Windows 10+. Enciende la impresora y emparéjala por Bluetooth antes de presionar Conectar.</div>
       </div>
+    </div>
+  </div>
+</div>
+<!-- EDIT GASTO MODAL -->
+<div id="modal-edit-gasto" class="modal-overlay">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-title">✏️ Editar Gasto</div>
+    <input type="hidden" id="edit-gasto-id">
+    <div id="edit-gasto-corte-warn" style="display:none;background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:.85rem;color:#856404">⚠️ Este día ya tiene corte confirmado. El efectivo esperado del corte <b>no se recalcula</b> al editar este gasto.</div>
+    <div class="form-group"><label class="form-label">Monto ($) *</label><input type="number" class="form-input" id="edit-gasto-monto" min="0.01" step="0.01" placeholder="0.00"></div>
+    <div class="form-group"><label class="form-label">Categoría *</label><select class="form-input" id="edit-gasto-categoria"></select></div>
+    <div class="form-group"><label class="form-label">Método de pago *</label>
+      <select class="form-input" id="edit-gasto-metodo">
+        <option value="Efectivo">💵 Efectivo</option>
+        <option value="Tarjeta">💳 Tarjeta</option>
+        <option value="Transferencia">📲 Transferencia</option>
+      </select>
+    </div>
+    <div class="form-group"><label class="form-label">Descripción *</label><input type="text" class="form-input" id="edit-gasto-descripcion" placeholder="Ej: Compra de insumos"></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="App.closeEditGasto()">Cancelar</button>
+      <button class="btn btn-primary" id="edit-gasto-save-btn" onclick="App.guardarEditGasto()">💾 Guardar cambios</button>
     </div>
   </div>
 </div>
@@ -1065,7 +1112,7 @@ const App=(()=>{
     try{
       await gastosDb.collection('gastos').add({
         fecha,categoria,descripcion,monto,metodoPago,notas:'',
-        registradoPor:cajeraName||'cajera',
+        registradoPor:cajeraName||'cajera',origen:'pos',
         timestamp:firebase.firestore.FieldValue.serverTimestamp()
       });
       toast('Gasto registrado ✓');
@@ -1090,6 +1137,111 @@ const App=(()=>{
       body.innerHTML=`<div style="background:#fff8f0;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:.85rem;color:var(--primary);font-weight:700">Total hoy: $${total.toFixed(2)} · ${items.length} registro(s)</div>`
         +items.map(g=>`<div style="background:white;border-radius:8px;padding:10px 12px;margin-bottom:8px;border:1px solid #eee"><div style="display:flex;justify-content:space-between;align-items:start"><div><div style="font-weight:700;font-size:.9rem">${g.descripcion||'—'}</div><div style="font-size:.78rem;color:#999;margin-top:2px">${g.categoria||'—'} · ${g.metodoPago||'—'}</div></div><div style="font-weight:800;color:var(--primary);white-space:nowrap">$${(g.monto||0).toFixed(2)}</div></div></div>`).join('');
     }catch(e){body.innerHTML='<div style="text-align:center;padding:20px;color:#e74c3c">Error al cargar</div>';console.error(e);}
+  }
+  // ── ADMIN GASTOS ────────────────────────────────────────────────
+  async function renderAdminGastos(){
+    if(!gastosDb){const tb=$('gastos-admin-tbody');if(tb)tb.innerHTML='<tr><td colspan="7" style="text-align:center;padding:20px;color:#e74c3c">Firestore no disponible</td></tr>';return;}
+    const dateEl=$('gastos-admin-date');
+    const date=(dateEl&&dateEl.value)?dateEl.value:localDate();
+    const cajSel=$('gastos-admin-cajera');
+    const cajeraFiltro=cajSel?cajSel.value:'';
+    const tbody=$('gastos-admin-tbody');
+    if(!tbody)return;
+    tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:20px;color:#aaa">Cargando...</td></tr>';
+    try{
+      const snap=await gastosDb.collection('gastos').where('fecha','==',date).get();
+      let items=snap.docs.map(d=>({id:d.id,...d.data()}))
+        .filter(g=>g.origen==='pos'||(g.registradoPor&&g.registradoPor!=='admin'&&g.registradoPor!=='socio1'));
+      const cajeras=[...new Set(items.map(g=>g.registradoPor||'cajera'))].sort();
+      const curVal=cajSel?cajSel.value:'';
+      if(cajSel)cajSel.innerHTML='<option value="">Todas</option>'+cajeras.map(c=>'<option value="'+c+'"'+(c===curVal?' selected':'')+'>'+c+'</option>').join('');
+      if(cajeraFiltro)items=items.filter(g=>(g.registradoPor||'cajera')===cajeraFiltro);
+      items.sort((a,b)=>(b.timestamp?.seconds||0)-(a.timestamp?.seconds||0));
+      const total=items.reduce((s,g)=>s+(g.monto||0),0);
+      const efec=items.filter(g=>g.metodoPago==='Efectivo').reduce((s,g)=>s+(g.monto||0),0);
+      if($('gst-total'))$('gst-total').textContent=fmt(total);
+      if($('gst-count'))$('gst-count').textContent=items.length;
+      if($('gst-efectivo'))$('gst-efectivo').textContent=fmt(efec);
+      if(!items.length){tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:20px;color:#aaa">Sin gastos del POS para esta fecha</td></tr>';return;}
+      const metColor={Efectivo:'#27ae60',Tarjeta:'#2980b9',Transferencia:'#8e44ad'};
+      tbody.innerHTML=items.map(g=>{
+        const hora=g.timestamp?.seconds?new Date(g.timestamp.seconds*1000).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}):'—';
+        const mc=metColor[g.metodoPago]||'#999';
+        return '<tr>'
+          +'<td>'+hora+'</td>'
+          +'<td>'+( g.registradoPor||'cajera')+'</td>'
+          +'<td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+(g.descripcion||'')+'">'+( g.descripcion||'—')+'</td>'
+          +'<td><span class="badge" style="background:#fff8f0;color:#e67e22;border:1px solid #f0d9c0">'+(g.categoria||'—')+'</span></td>'
+          +'<td><span class="badge" style="background:'+mc+'22;color:'+mc+'">'+(g.metodoPago||'—')+'</span></td>'
+          +'<td style="font-weight:700">'+fmt(g.monto||0)+'</td>'
+          +'<td style="white-space:nowrap"><button class="btn btn-sm btn-outline" style="margin-right:4px" onclick="App.openEditGasto(\''+g.id+'\')">✏️</button>'
+          +'<button class="btn btn-sm btn-danger" onclick="App.deleteAdminGasto(\''+g.id+'\',\''+g.fecha+'\')">🗑️</button></td>'
+          +'</tr>';
+      }).join('');
+    }catch(e){tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:20px;color:#e74c3c">Error al cargar</td></tr>';console.error(e);}
+  }
+  async function openEditGasto(id){
+    if(!gastosDb)return;
+    try{
+      const doc=await gastosDb.collection('gastos').doc(id).get();
+      if(!doc.exists){toast('Gasto no encontrado','error');return;}
+      const g=doc.data();
+      $('edit-gasto-id').value=id;
+      $('edit-gasto-monto').value=g.monto||'';
+      $('edit-gasto-metodo').value=g.metodoPago||'Efectivo';
+      $('edit-gasto-descripcion').value=g.descripcion||'';
+      const sel=$('edit-gasto-categoria');
+      sel.innerHTML='<option>Cargando...</option>';
+      try{
+        const csnap=await gastosDb.collection('categorias').orderBy('orden').get();
+        const cats=csnap.docs.map(d=>d.data().nombre);
+        sel.innerHTML=cats.map(c=>'<option value="'+c+'"'+(c===g.categoria?' selected':'')+'>'+c+'</option>').join('');
+      }catch(e){sel.innerHTML='<option value="'+( g.categoria||'')+'">'+( g.categoria||'—')+'</option>';}
+      const corteDoc=await gastosDb.collection('ingresos').doc('pos-'+(g.fecha||'')).get();
+      $('edit-gasto-corte-warn').style.display=corteDoc.exists?'block':'none';
+      $('modal-edit-gasto').classList.add('show');
+    }catch(e){toast('Error al abrir gasto','error');console.error(e);}
+  }
+  function closeEditGasto(){$('modal-edit-gasto').classList.remove('show');}
+  async function guardarEditGasto(){
+    const id=$('edit-gasto-id').value;if(!id||!gastosDb)return;
+    const monto=parseFloat($('edit-gasto-monto').value||'0');
+    const categoria=$('edit-gasto-categoria').value;
+    const metodoPago=$('edit-gasto-metodo').value;
+    const descripcion=($('edit-gasto-descripcion').value||'').trim();
+    if(!monto||monto<=0)return toast('Monto debe ser mayor a $0','error');
+    if(!categoria)return toast('Selecciona una categoría','error');
+    if(!descripcion)return toast('Ingresa una descripción','error');
+    const btn=$('edit-gasto-save-btn');
+    if(btn){btn.disabled=true;btn.textContent='Guardando...';}
+    try{
+      await gastosDb.collection('gastos').doc(id).update({
+        monto,categoria,metodoPago,descripcion,
+        editadoPor:'admin-pos',
+        editadoEn:firebase.firestore.FieldValue.serverTimestamp()
+      });
+      toast('Gasto actualizado ✓');
+      closeEditGasto();
+      renderAdminGastos();
+    }catch(e){toast('Error al guardar','error');console.error(e);}
+    finally{if(btn){btn.disabled=false;btn.textContent='💾 Guardar cambios';}}
+  }
+  async function deleteAdminGasto(id,fecha){
+    if(!gastosDb)return;
+    try{
+      const corteDoc=await gastosDb.collection('ingresos').doc('pos-'+(fecha||'')).get();
+      if(corteDoc.exists){
+        const ok=await showConfirm('Este día ya tiene corte confirmado. El efectivo esperado del corte no se recalcula. ¿Continuar?');
+        if(!ok)return;
+      }
+    }catch(e){}
+    const typed=window.prompt('Escribe ELIMINAR (en mayúsculas) para confirmar:');
+    if(typed!=='ELIMINAR'){toast('Cancelado — escribe exactamente ELIMINAR','error');return;}
+    try{
+      await gastosDb.collection('gastos').doc(id).delete();
+      toast('Gasto eliminado','error');
+      renderAdminGastos();
+    }catch(e){toast('Error al eliminar','error');console.error(e);}
   }
   // ── CONFIRMAR CORTE → INGRESOS ──────────────────────────────────
   async function confirmarCorte(){
@@ -1166,6 +1318,7 @@ const App=(()=>{
     const cfg=getCfg();
     if($('admin-biz-name'))$('admin-biz-name').textContent=cfg.name||'HR BURGER HOUSE';
     if($('sales-date'))$('sales-date').value=localDate();
+    if($('gastos-admin-date'))$('gastos-admin-date').value=localDate();
     fillCatSelect();renderProdTable();renderCatsList();renderSales();loadCfg();
   }
   async function logout(){if(!await showConfirm('¿Cerrar sesión de cajera?'))return;if(clockTimer)clearInterval(clockTimer);cart=[];showScreen('screen-login');}
@@ -1689,7 +1842,7 @@ const App=(()=>{
   function writePromos(promos){cache.promos=promos;if(!db)return;if(!promos.length){db.ref('promos').remove();return;}const o={};promos.forEach(p=>o[p.id]=p);db.ref('promos').set(o);}
   function savePromo(){const name=document.getElementById('promo-name').value.trim(),type=document.getElementById('promo-type').value,value=parseFloat(document.getElementById('promo-value').value);if(!name){toast('Escribe el nombre','error');return;}if(!value||value<=0){toast('El valor debe ser mayor a 0','error');return;}const promos=getPromos();promos.push({id:uid(),name,type,value});writePromos(promos);document.getElementById('promo-name').value='';document.getElementById('promo-value').value='';renderPromosList();toast('Promocion agregada');}
   async function deletePromo(id){if(!await showConfirm('Eliminar esta promocion?'))return;writePromos(getPromos().filter(p=>p.id!==id));renderPromosList();toast('Eliminada','error');}
-  function renderPromosList(){const el=document.getElementById('promo-list-admin');if(!el)return;const promos=getPromos();if(!promos.length){el.innerHTML='<span style="color:#ccc">Sin promociones aun</span>';return;}el.innerHTML='<div class="promo-list">'+promos.map(p=>'<div class="promo-item"><div><div class="promo-name">'+p.name+'</div><div class="promo-val">'+(p.type==='pct'?p.value+'% de descuento':'$'+p.value+' de descuento')+'</div></div><button class="btn btn-sm btn-danger" onclick="App.deletePromo(\''+p.id+'\')">🗑️</button></div>').join('')+'</div>';}  function goTab(t){document.querySelectorAll('.admin-body>div').forEach(d=>d.style.display='none');document.querySelectorAll('.admin-tab').forEach(b=>b.classList.remove('active'));const tabs={products:0,categories:1,promos:2,inventory:3,sales:4,settings:5};$('tab-'+t).style.display='block';document.querySelectorAll('.admin-tab')[tabs[t]].classList.add('active');if(t==='sales')renderSales();if(t==='products'){fillCatSelect();renderProdTable();}if(t==='categories')renderCatsList();if(t==='promos')renderPromosList();if(t==='inventory'){renderInventory();loadInvLog();}if(t==='settings')loadCfg();}
+  function renderPromosList(){const el=document.getElementById('promo-list-admin');if(!el)return;const promos=getPromos();if(!promos.length){el.innerHTML='<span style="color:#ccc">Sin promociones aun</span>';return;}el.innerHTML='<div class="promo-list">'+promos.map(p=>'<div class="promo-item"><div><div class="promo-name">'+p.name+'</div><div class="promo-val">'+(p.type==='pct'?p.value+'% de descuento':'$'+p.value+' de descuento')+'</div></div><button class="btn btn-sm btn-danger" onclick="App.deletePromo(\''+p.id+'\')">🗑️</button></div>').join('')+'</div>';}  function goTab(t){document.querySelectorAll('.admin-body>div').forEach(d=>d.style.display='none');document.querySelectorAll('.admin-tab').forEach(b=>b.classList.remove('active'));const tabs={products:0,categories:1,promos:2,inventory:3,sales:4,gastos:5,settings:6};$('tab-'+t).style.display='block';document.querySelectorAll('.admin-tab')[tabs[t]].classList.add('active');if(t==='sales')renderSales();if(t==='products'){fillCatSelect();renderProdTable();}if(t==='categories')renderCatsList();if(t==='promos')renderPromosList();if(t==='inventory'){renderInventory();loadInvLog();}if(t==='gastos')renderAdminGastos();if(t==='settings')loadCfg();}
 
   function loadCfg(){const c=getCfg();$('cfg-name').value=c.name||'';$('cfg-tel').value=c.tel||'';$('cfg-addr').value=c.addr||'';$('cfg-msg').value=c.msg||'';$('cfg-pin').value=c.pin||'';$('cfg-alert-email').value=c.alertEmail||'';$('cfg-gas').value=c.gas||'';$('cfg-personal-disc').value=c.personalDisc!=null?c.personalDisc:'';_empleados=(c.empleados||[]).map(e=>typeof e==='string'?{name:e,pct:0}:{name:e.name||'',pct:parseFloat(e.pct)||0});renderEmpleados();$('cfg-ejs-pubkey').value=c.ejsPubKey||'';$('cfg-ejs-service').value=c.ejsService||'';$('cfg-ejs-template').value=c.ejsTemplate||'';$('cfg-ejs-email').value=c.ejsEmail||'';$('cfg-ejs-hora1').value=c.ejsHora1||'22:00';$('cfg-ejs-hora2').value=c.ejsHora2||'';const days=c.ejsDays||[1,2,3,4,5,6,0];[0,1,2,3,4,5,6].forEach(d=>{const el=$('cfg-ejs-d'+d);if(el)el.checked=days.includes(d);});}
   function saveSettings(){const days=[];[0,1,2,3,4,5,6].forEach(d=>{const el=$('cfg-ejs-d'+d);if(el&&el.checked)days.push(d);});const empleados=_empleados.filter(e=>e.name.trim());const cfg={...getCfg(),name:$('cfg-name').value.trim()||'HR BURGER HOUSE',tel:$('cfg-tel').value.trim(),addr:$('cfg-addr').value.trim(),msg:$('cfg-msg').value.trim()||'¡Gracias por su preferencia!',pin:$('cfg-pin').value.trim()||'1234',alertEmail:$('cfg-alert-email').value.trim(),gas:$('cfg-gas').value.trim(),personalDisc:$('cfg-personal-disc').value!==''?parseFloat($('cfg-personal-disc').value)||0:getCfg().personalDisc||0,empleados,ejsPubKey:$('cfg-ejs-pubkey').value.trim(),ejsService:$('cfg-ejs-service').value.trim(),ejsTemplate:$('cfg-ejs-template').value.trim(),ejsEmail:$('cfg-ejs-email').value.trim(),ejsHora1:$('cfg-ejs-hora1').value||'22:00',ejsHora2:$('cfg-ejs-hora2').value||'',ejsDays:days};writeCfg(cfg);toast('✅ Ajustes guardados');}
@@ -1859,7 +2012,7 @@ const App=(()=>{
       {type:'center',text:'¡Listo para imprimir!'},
     ])).then(()=>toast('Prueba enviada'));
   }
-  return{init,saveFirebaseConfig,resetFirebase,loginCajera,confirmCajera,closeModalCajera,logout,showPin,closePin,pinKey,pinDel,pinEnter,setFilterCat,renderProducts,addToCart,changeQty,clearCart,openCheckout,closeCheckout,selPay,calcChange,calcDiscount,applyPromo,setDiscType,completeSale,openMiHistorial,closeMiHistorial,openCorte,closeCorte,printCorte,openPrinterModal,closePrinterModal,forceUpdate,goTab,saveProduct,editProduct,cancelEdit,deleteProd,toggleProd,renderProdTable,addCat,delCat,renderSales,reprint,clearSales,exportCSV,saveSettings,switchTab,savePromo,deletePromo,renderPromosList,btConnect,btDisconnect,btTest,renderInventory,addInvItem,deleteInvItem,adjustStock,saveInvQty,startInvEdit,cancelInvEdit,saveInvEdit,openInvEmojiPicker,reloadInventory,loadInvLog,clearInvLog,sendTestEmail,sendStockAlert,addRecipeRow,removeRecipeRow,renderRecipe,sendDailyReport,previewReport,addEmpleado,removeEmpleado,updateEmpleado,onCommEmpChange,openGastos,closeGastos,gastosSwitchTab,saveGasto,sendTestReport,confirmarCorte};
+  return{init,saveFirebaseConfig,resetFirebase,loginCajera,confirmCajera,closeModalCajera,logout,showPin,closePin,pinKey,pinDel,pinEnter,setFilterCat,renderProducts,addToCart,changeQty,clearCart,openCheckout,closeCheckout,selPay,calcChange,calcDiscount,applyPromo,setDiscType,completeSale,openMiHistorial,closeMiHistorial,openCorte,closeCorte,printCorte,openPrinterModal,closePrinterModal,forceUpdate,goTab,saveProduct,editProduct,cancelEdit,deleteProd,toggleProd,renderProdTable,addCat,delCat,renderSales,reprint,clearSales,exportCSV,saveSettings,switchTab,savePromo,deletePromo,renderPromosList,btConnect,btDisconnect,btTest,renderInventory,addInvItem,deleteInvItem,adjustStock,saveInvQty,startInvEdit,cancelInvEdit,saveInvEdit,openInvEmojiPicker,reloadInventory,loadInvLog,clearInvLog,sendTestEmail,sendStockAlert,addRecipeRow,removeRecipeRow,renderRecipe,sendDailyReport,previewReport,addEmpleado,removeEmpleado,updateEmpleado,onCommEmpChange,openGastos,closeGastos,gastosSwitchTab,saveGasto,sendTestReport,confirmarCorte,renderAdminGastos,openEditGasto,closeEditGasto,guardarEditGasto,deleteAdminGasto};
 })();
 document.addEventListener('DOMContentLoaded',()=>App.init());
 </script>

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <script>
 (function(){
-  var V='11';
+  var V='12';
   var stored=localStorage.getItem('hrb-v');
   if(stored&&stored!==V){
     localStorage.setItem('hrb-v',V);
@@ -850,6 +850,19 @@ textarea.form-input{height:130px;resize:vertical;font-family:monospace;font-size
     </div>
   </div>
 </div>
+<!-- ANULAR VENTA MODAL -->
+<div id="modal-anular-venta" class="modal-overlay">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-title" style="color:var(--danger)">🚫 Anular venta</div>
+    <div id="anular-corte-warn" style="display:none;background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:.85rem;color:#856404">⚠️ Este día ya tiene corte confirmado. <b>Confirma el corte nuevamente</b> después de anular para actualizar los ingresos.</div>
+    <div id="anular-sale-detalle" style="background:#f8f9fa;border-radius:10px;padding:14px 16px;margin-bottom:16px;font-size:.9rem;line-height:1.9"></div>
+    <div class="form-group"><label class="form-label">Motivo de anulación *</label><input type="text" class="form-input" id="anular-motivo" placeholder="Ej: Error de cajera, cliente canceló..."></div>
+    <div class="modal-actions" style="gap:12px">
+      <button class="btn btn-outline" style="flex:1;padding:14px;font-size:1rem" onclick="App.closeAnularVenta()">Cancelar</button>
+      <button class="btn btn-danger" style="flex:1;padding:14px;font-size:1rem" id="anular-confirm-btn" onclick="App.confirmarAnular()">🚫 Sí, anular</button>
+    </div>
+  </div>
+</div>
 <!-- TICKET PRINT -->
 <div id="ticket-print"></div>
 <!-- CONFIRM MODAL -->
@@ -1278,7 +1291,8 @@ const App=(()=>{
     if(cBtn){cBtn.disabled=true;cBtn.textContent='Registrando...';}
     try{
       const today=localDate();
-      const sales=await getSales(today);
+      const allSalesCC=await getSales(today);
+      const sales=allSalesCC.filter(s=>!s.anulada);
       const byPay={cash:0,card:0,transfer:0};
       sales.filter(s=>s.pay!=='personal').forEach(s=>{
         if(s.pay==='cash')byPay.cash=+(byPay.cash+(s.total||0)).toFixed(2);
@@ -1449,7 +1463,7 @@ const App=(()=>{
     $('historial-cajera-title').textContent=cajeraName||'—';
     const today=localDate();
     const all=await getSales(today);
-    const sales=all.filter(s=>s.cajera===cajeraName);
+    const sales=all.filter(s=>s.cajera===cajeraName&&!s.anulada);
     const total=sales.reduce((s,x)=>s+x.total,0);
     const totalComm=sales.reduce((s,x)=>s+(x.totalCommission||0),0);
     $('hist-count').textContent=sales.length;
@@ -1480,7 +1494,8 @@ const App=(()=>{
     if($('corte-cajera'))$('corte-cajera').textContent=cajeraName||'—';
     if($('corte-fecha'))$('corte-fecha').textContent=new Date().toLocaleDateString('es-MX',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
     const today=localDate();
-    const sales=await getSales(today);
+    const allSalesCorte=await getSales(today);
+    const sales=allSalesCorte.filter(s=>!s.anulada);
     const total=sales.reduce((s,x)=>s+x.total,0);
     const byPay={cash:0,card:0,transfer:0,personal:0},countPay={cash:0,card:0,transfer:0,personal:0};
     sales.forEach(s=>{byPay[s.pay]=(byPay[s.pay]||0)+s.total;countPay[s.pay]=(countPay[s.pay]||0)+1;});
@@ -1544,7 +1559,8 @@ const App=(()=>{
     if(!BTPrinter.isConnected()){toast('Conecta la impresora Bluetooth primero','error');return;}
     const cfg=getCfg();
     const today=localDate();
-    const sales=await getSales(today);
+    const allSalesPrint=await getSales(today);
+    const sales=allSalesPrint.filter(s=>!s.anulada);
     const total=sales.reduce((s,x)=>s+x.total,0);
     const byPay={cash:0,card:0,transfer:0,personal:0},countPay={cash:0,card:0,transfer:0,personal:0};
     sales.forEach(s=>{byPay[s.pay]=(byPay[s.pay]||0)+s.total;countPay[s.pay]=(countPay[s.pay]||0)+1;});
@@ -1620,7 +1636,7 @@ const App=(()=>{
     if(!db)return[];
     const snap=await db.ref('sales').once('value');
     if(!snap.val())return[];
-    let list=Object.values(snap.val()).sort((a,b)=>new Date(b.date)-new Date(a.date));
+    let list=Object.entries(snap.val()).map(([k,v])=>({...v,_rtdbKey:k})).sort((a,b)=>new Date(b.date)-new Date(a.date));
     if(dateFilter)list=list.filter(s=>s.date&&localDate(s.date)===dateFilter);
     return list;
   }
@@ -1677,16 +1693,103 @@ const App=(()=>{
   async function renderSales(){
     const dateVal=$('sales-date');if(!dateVal)return;
     const dateFilter=dateVal.value;
-    const filtered=await getSales(dateFilter);
+    const allSales=await getSales(dateFilter);
     const tbody=$('sales-tbody');if(!tbody)return;
-    const total=filtered.reduce((s,x)=>s+x.total,0),avg=filtered.length?total/filtered.length:0;
-    if($('st-total'))$('st-total').textContent=fmt(total);if($('st-count'))$('st-count').textContent=filtered.length;if($('st-avg'))$('st-avg').textContent=fmt(avg);
-    if(!filtered.length){tbody.innerHTML='<tr><td colspan="7" class="empty-table">Sin ventas en este período</td></tr>';return;}
-    const payLabel={cash:'Efectivo',card:'Tarjeta',transfer:'Transferencia'},payBadge={cash:'badge-cash',card:'badge-card',transfer:'badge-transfer'};
-    tbody.innerHTML=filtered.map(s=>`<tr><td class="order-num">#${String(s.orderN).padStart(3,'0')}</td><td>${new Date(s.date).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})}</td><td>${s.cajera||'—'}</td><td class="sale-products">${s.items?s.items.map(i=>i.qty+'x '+i.name).join(', '):''}</td><td><span class="badge ${payBadge[s.pay]||''}">${payLabel[s.pay]||s.pay}</span></td><td class="sale-total-cell">${fmt(s.total)}</td><td><button class="btn btn-sm btn-outline" onclick="App.reprint('${s.id}')">🖨️</button></td></tr>`).join('');
+    const activas=allSales.filter(s=>!s.anulada);
+    const total=activas.reduce((s,x)=>s+x.total,0),avg=activas.length?total/activas.length:0;
+    if($('st-total'))$('st-total').textContent=fmt(total);if($('st-count'))$('st-count').textContent=activas.length;if($('st-avg'))$('st-avg').textContent=fmt(avg);
+    if(!allSales.length){tbody.innerHTML='<tr><td colspan="7" class="empty-table">Sin ventas en este período</td></tr>';return;}
+    const payLabel={cash:'Efectivo',card:'Tarjeta',transfer:'Transferencia',personal:'Personal'},payBadge={cash:'badge-cash',card:'badge-card',transfer:'badge-transfer'};
+    tbody.innerHTML=allSales.map(s=>{
+      const isAnulada=!!s.anulada;
+      const rowStyle=isAnulada?'opacity:.5':'';
+      const tdStyle=isAnulada?'text-decoration:line-through':'';
+      const motivoHtml=s.motivo?'<span style="display:block;font-size:.7rem;color:#c0392b;text-decoration:none;font-style:italic">'+s.motivo+'</span>':'';
+      const anuladaBadge=isAnulada?'<span style="display:inline-block;font-size:.68rem;font-weight:700;color:#fff;background:#c0392b;border-radius:3px;padding:1px 5px;margin-left:4px;text-decoration:none">ANULADA</span>'+motivoHtml:'';
+      const actionBtn=isAnulada
+        ?`<button class="btn btn-sm btn-outline" style="font-size:.72rem;padding:3px 6px" onclick="App.revertirAnulacion('${s._rtdbKey}')">↩️</button>`
+        :`<button class="btn btn-sm btn-danger" style="font-size:.72rem;padding:3px 6px" title="Anular venta" onclick="App.openAnularVenta('${s._rtdbKey}')">🚫</button>`;
+      return `<tr style="${rowStyle}"><td class="order-num" style="${tdStyle}">#${String(s.orderN).padStart(3,'0')}</td><td style="${tdStyle}">${new Date(s.date).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})}</td><td style="${tdStyle}">${s.cajera||'—'}</td><td class="sale-products">${s.items?s.items.map(i=>i.qty+'x '+i.name).join(', '):''}${anuladaBadge}</td><td><span class="badge ${payBadge[s.pay]||''}">${payLabel[s.pay]||s.pay}</span></td><td class="sale-total-cell" style="${tdStyle}">${fmt(s.total)}</td><td style="white-space:nowrap"><button class="btn btn-sm btn-outline" onclick="App.reprint('${s.id}')">🖨️</button> ${actionBtn}</td></tr>`;
+    }).join('');
   }
   async function reprint(id){const sales=await getSales();const s=sales.find(x=>x.id===id);if(s)printTicket(s,s.received-s.total,getCfg());}
   async function clearSales(){if(!await showConfirm('¿Eliminar TODO el historial de ventas? Esta acción no se puede deshacer.'))return;const typed=window.prompt('Escribe ELIMINAR (en mayúsculas) para confirmar:');if(typed!=='ELIMINAR'){toast('Cancelado — escribe exactamente ELIMINAR','error');return;}if(db)await db.ref('sales').remove();renderSales();toast('Historial eliminado','error');}
+
+  let _anularRtdbKey=null;
+  async function openAnularVenta(rtdbKey){
+    _anularRtdbKey=rtdbKey;
+    const allSales=await getSales();
+    const s=allSales.find(x=>x._rtdbKey===rtdbKey);
+    if(!s)return;
+    const payLabel={cash:'Efectivo',card:'Tarjeta',transfer:'Transferencia',personal:'Comida Empleado'};
+    $('anular-sale-detalle').innerHTML=
+      '<div style="display:flex;justify-content:space-between"><span>Orden</span><span><b>#'+String(s.orderN).padStart(3,'0')+'</b></span></div>'+
+      '<div style="display:flex;justify-content:space-between"><span>Hora</span><span>'+new Date(s.date).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})+'</span></div>'+
+      '<div style="display:flex;justify-content:space-between"><span>Cajera</span><span>'+(s.cajera||'—')+'</span></div>'+
+      '<div style="display:flex;justify-content:space-between;gap:12px"><span>Productos</span><span style="text-align:right">'+(s.items?s.items.map(i=>i.qty+'x '+i.name).join(', '):'')+'</span></div>'+
+      '<div style="display:flex;justify-content:space-between;border-top:1px solid #e0e0e0;margin-top:8px;padding-top:8px"><span>Total</span><span style="font-weight:700;color:var(--danger);font-size:1.05rem">'+fmt(s.total)+'</span></div>';
+    $('anular-motivo').value='';
+    const warn=$('anular-corte-warn');
+    if(warn)warn.style.display='none';
+    if(gastosDb){try{const d=await gastosDb.collection('ingresos').doc('pos-'+localDate(s.date)).get();if(d.exists&&warn)warn.style.display='block';}catch(e){}}
+    $('modal-anular-venta').classList.add('show');
+    setTimeout(()=>{const m=$('anular-motivo');if(m)m.focus();},100);
+  }
+  function closeAnularVenta(){$('modal-anular-venta').classList.remove('show');_anularRtdbKey=null;}
+  async function confirmarAnular(){
+    const motivo=($('anular-motivo').value||'').trim();
+    if(!motivo){toast('Escribe el motivo de anulación','error');return;}
+    if(!_anularRtdbKey||!db){closeAnularVenta();return;}
+    const btn=$('anular-confirm-btn');
+    if(btn){btn.disabled=true;btn.textContent='Anulando...';}
+    try{
+      const allSales=await getSales();
+      const s=allSales.find(x=>x._rtdbKey===_anularRtdbKey);
+      if(!s){toast('Venta no encontrada','error');return;}
+      await db.ref('sales').child(_anularRtdbKey).update({anulada:true,anuladaPor:cajeraName||'admin',anuladaEn:new Date().toISOString(),motivo});
+      const invItems=getInventory();let invChanged=false;
+      (s.items||[]).forEach(cartItem=>{
+        const prod=getProds().find(p=>p.id===cartItem.id);
+        if(!prod||!prod.recipe||!prod.recipe.length)return;
+        prod.recipe.forEach(r=>{
+          const it=invItems.find(x=>x.id===r.invId);if(!it)return;
+          const oldQty=it.qty;
+          it.qty=parseFloat((it.qty+r.qty*cartItem.qty).toFixed(3));
+          logInv({type:'adjust',itemId:it.id,name:it.name,unit:it.unit,oldQty,newQty:it.qty});
+          invChanged=true;
+        });
+      });
+      if(invChanged)writeInventory(invItems);
+      closeAnularVenta();
+      toast('Venta anulada');
+      renderSales();
+    }catch(e){toast('Error al anular','error');console.error(e);}
+    finally{if(btn){btn.disabled=false;btn.textContent='🚫 Sí, anular';}}
+  }
+  async function revertirAnulacion(rtdbKey){
+    if(!await showConfirm('¿Revertir la anulación? La venta quedará activa y se contará en totales nuevamente.'))return;
+    if(!db)return;
+    const allSales=await getSales();
+    const s=allSales.find(x=>x._rtdbKey===rtdbKey);
+    if(!s)return;
+    await db.ref('sales').child(rtdbKey).update({anulada:null,anuladaPor:null,anuladaEn:null,motivo:null});
+    const invItems=getInventory();let invChanged=false;
+    (s.items||[]).forEach(cartItem=>{
+      const prod=getProds().find(p=>p.id===cartItem.id);
+      if(!prod||!prod.recipe||!prod.recipe.length)return;
+      prod.recipe.forEach(r=>{
+        const it=invItems.find(x=>x.id===r.invId);if(!it)return;
+        const oldQty=it.qty;
+        it.qty=Math.max(0,parseFloat((it.qty-r.qty*cartItem.qty).toFixed(3)));
+        logInv({type:'adjust',itemId:it.id,name:it.name,unit:it.unit,oldQty,newQty:it.qty});
+        invChanged=true;
+      });
+    });
+    if(invChanged)writeInventory(invItems);
+    toast('Venta reactivada');
+    renderSales();
+  }
+
   async function exportCSV(){
     const dateVal=$('sales-date');
     const filtered=await getSales(dateVal?dateVal.value:null);
@@ -1882,7 +1985,8 @@ const App=(()=>{
   }
   async function _buildReportParams(dateFilter){
     const today=dateFilter||localDate();
-    const sales=await getSales(today);
+    const allSalesRpt=await getSales(today);
+    const sales=allSalesRpt.filter(s=>!s.anulada);
     const totalVentas=sales.length;
     const totalIngresos=sales.reduce((a,s)=>a+s.total,0);
     const efectivo=sales.filter(s=>s.pay==='cash').reduce((a,s)=>a+s.total,0);
@@ -2040,7 +2144,7 @@ const App=(()=>{
       {type:'center',text:'¡Listo para imprimir!'},
     ])).then(()=>toast('Prueba enviada'));
   }
-  return{init,saveFirebaseConfig,resetFirebase,loginCajera,confirmCajera,closeModalCajera,logout,showPin,closePin,pinKey,pinDel,pinEnter,setFilterCat,renderProducts,addToCart,changeQty,clearCart,openCheckout,closeCheckout,selPay,calcChange,calcDiscount,applyPromo,setDiscType,completeSale,openMiHistorial,closeMiHistorial,openCorte,closeCorte,printCorte,openPrinterModal,closePrinterModal,forceUpdate,goTab,saveProduct,editProduct,cancelEdit,deleteProd,toggleProd,renderProdTable,addCat,delCat,renderSales,reprint,clearSales,exportCSV,saveSettings,switchTab,savePromo,deletePromo,renderPromosList,btConnect,btDisconnect,btTest,renderInventory,addInvItem,deleteInvItem,adjustStock,saveInvQty,startInvEdit,cancelInvEdit,saveInvEdit,openInvEmojiPicker,reloadInventory,loadInvLog,clearInvLog,sendTestEmail,sendStockAlert,addRecipeRow,removeRecipeRow,renderRecipe,sendDailyReport,previewReport,addEmpleado,removeEmpleado,updateEmpleado,onCommEmpChange,openGastos,closeGastos,gastosSwitchTab,saveGasto,sendTestReport,confirmarCorte,renderAdminGastos,openEditGasto,closeEditGasto,guardarEditGasto,deleteAdminGasto,closeDelGasto,confirmarDelGasto};
+  return{init,saveFirebaseConfig,resetFirebase,loginCajera,confirmCajera,closeModalCajera,logout,showPin,closePin,pinKey,pinDel,pinEnter,setFilterCat,renderProducts,addToCart,changeQty,clearCart,openCheckout,closeCheckout,selPay,calcChange,calcDiscount,applyPromo,setDiscType,completeSale,openMiHistorial,closeMiHistorial,openCorte,closeCorte,printCorte,openPrinterModal,closePrinterModal,forceUpdate,goTab,saveProduct,editProduct,cancelEdit,deleteProd,toggleProd,renderProdTable,addCat,delCat,renderSales,reprint,clearSales,exportCSV,saveSettings,switchTab,savePromo,deletePromo,renderPromosList,btConnect,btDisconnect,btTest,renderInventory,addInvItem,deleteInvItem,adjustStock,saveInvQty,startInvEdit,cancelInvEdit,saveInvEdit,openInvEmojiPicker,reloadInventory,loadInvLog,clearInvLog,sendTestEmail,sendStockAlert,addRecipeRow,removeRecipeRow,renderRecipe,sendDailyReport,previewReport,addEmpleado,removeEmpleado,updateEmpleado,onCommEmpChange,openGastos,closeGastos,gastosSwitchTab,saveGasto,sendTestReport,confirmarCorte,renderAdminGastos,openEditGasto,closeEditGasto,guardarEditGasto,deleteAdminGasto,closeDelGasto,confirmarDelGasto,openAnularVenta,closeAnularVenta,confirmarAnular,revertirAnulacion};
 })();
 document.addEventListener('DOMContentLoaded',()=>App.init());
 </script>

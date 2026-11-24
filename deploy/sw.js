@@ -1,4 +1,4 @@
-const V = 'hr-burger-v10';
+const V = 'hr-burger-v11';
 
 self.addEventListener('install', e => {
   self.skipWaiting();

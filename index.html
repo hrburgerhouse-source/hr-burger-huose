@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <script>
 (function(){
-  var V='13';
+  var V='14';
   var stored=localStorage.getItem('hrb-v');
   if(stored&&stored!==V){
     localStorage.setItem('hrb-v',V);
@@ -493,7 +493,7 @@ textarea.form-input{height:130px;resize:vertical;font-family:monospace;font-size
     <div id="gastos-section-form">
       <div class="form-group">
         <label class="form-label">Monto *</label>
-        <input type="number" class="form-input" id="gasto-monto" placeholder="0.00" step="0.01" min="0.01" oninput="App.actualizarPreviewCuentaPOS()">
+        <input type="number" class="form-input" id="gasto-monto" placeholder="0.00" step="0.01" min="0.01">
       </div>
       <div class="form-group">
         <label class="form-label">Categoría *</label>
@@ -514,11 +514,10 @@ textarea.form-input{height:130px;resize:vertical;font-family:monospace;font-size
       </div>
       <div class="form-group">
         <label class="form-label">¿De dónde salió el dinero?</label>
-        <select class="form-select" id="gasto-cuenta-origen" onchange="App.actualizarPreviewCuentaPOS()">
+        <select class="form-select" id="gasto-cuenta-origen">
           <option value="">💼 Fondos del negocio (normal)</option>
         </select>
       </div>
-      <div id="gasto-cuenta-preview" style="display:none;background:#f0f7ff;border:1px solid #b8d4f0;border-radius:8px;padding:10px 14px;margin-top:-8px;margin-bottom:12px;font-size:.85rem"></div>
       <div class="modal-actions">
         <button class="btn btn-outline" onclick="App.closeGastos()">Cancelar</button>
         <button class="btn btn-primary btn-lg" id="gasto-save-btn" onclick="App.saveGasto()">Registrar Gasto</button>
@@ -1139,20 +1138,6 @@ const App=(()=>{
       cuentasPOS.forEach(c=>{sel.add(new Option('🏦 '+c.nombre+(c.banco?' — '+c.banco:''),c.id));});
     }catch(e){console.warn('No se pudieron cargar cuentas',e);}
   }
-  function actualizarPreviewCuentaPOS(){
-    const sel=$('gasto-cuenta-origen'),preview=$('gasto-cuenta-preview');
-    if(!sel||!preview)return;
-    const cid=sel.value;
-    if(!cid){preview.style.display='none';return;}
-    const cuenta=cuentasPOS.find(c=>c.id===cid);
-    if(!cuenta){preview.style.display='none';return;}
-    const monto=parseFloat($('gasto-monto')?.value||'0')||0;
-    const saldoAct=+(cuenta.saldoActual||0);
-    const saldoNvo=+(saldoAct-monto).toFixed(2);
-    const neg=saldoNvo<0;
-    preview.style.display='block';
-    preview.innerHTML='<span style="color:#555">Saldo actual: <b>$'+saldoAct.toFixed(2)+'</b> → quedará en <b style="color:'+(neg?'#e74c3c':'#27ae60')+'">$'+saldoNvo.toFixed(2)+'</b></span>'+(neg?'<div style="color:#e74c3c;font-size:.8rem;margin-top:4px">⚠️ El saldo quedará negativo</div>':'');
-  }
   async function saveGasto(){
     const monto=parseFloat($('gasto-monto')?.value||'0');
     const categoria=$('gasto-categoria')?.value||'';
@@ -1199,7 +1184,6 @@ const App=(()=>{
       toast('Gasto registrado ✓');
       $('gasto-monto').value='';$('gasto-categoria').value='';$('gasto-metodo').value='';$('gasto-descripcion').value='';
       if($('gasto-cuenta-origen'))$('gasto-cuenta-origen').value='';
-      if($('gasto-cuenta-preview'))$('gasto-cuenta-preview').style.display='none';
       gastosSwitchTab('list');
     }catch(e){toast('Error al guardar gasto','error');console.error(e);}
     finally{if(btn){btn.disabled=false;btn.textContent='Registrar Gasto';}}
@@ -2203,7 +2187,7 @@ const App=(()=>{
       {type:'center',text:'¡Listo para imprimir!'},
     ])).then(()=>toast('Prueba enviada'));
   }
-  return{init,saveFirebaseConfig,resetFirebase,loginCajera,confirmCajera,closeModalCajera,logout,showPin,closePin,pinKey,pinDel,pinEnter,setFilterCat,renderProducts,addToCart,changeQty,clearCart,openCheckout,closeCheckout,selPay,calcChange,calcDiscount,applyPromo,setDiscType,completeSale,openMiHistorial,closeMiHistorial,openCorte,closeCorte,printCorte,openPrinterModal,closePrinterModal,forceUpdate,goTab,saveProduct,editProduct,cancelEdit,deleteProd,toggleProd,renderProdTable,addCat,delCat,renderSales,reprint,clearSales,exportCSV,saveSettings,switchTab,savePromo,deletePromo,renderPromosList,btConnect,btDisconnect,btTest,renderInventory,addInvItem,deleteInvItem,adjustStock,saveInvQty,startInvEdit,cancelInvEdit,saveInvEdit,openInvEmojiPicker,reloadInventory,loadInvLog,clearInvLog,sendTestEmail,sendStockAlert,addRecipeRow,removeRecipeRow,renderRecipe,sendDailyReport,previewReport,addEmpleado,removeEmpleado,updateEmpleado,onCommEmpChange,openGastos,closeGastos,gastosSwitchTab,saveGasto,actualizarPreviewCuentaPOS,sendTestReport,confirmarCorte,renderAdminGastos,openEditGasto,closeEditGasto,guardarEditGasto,deleteAdminGasto,closeDelGasto,confirmarDelGasto,openAnularVenta,closeAnularVenta,confirmarAnular,revertirAnulacion};
+  return{init,saveFirebaseConfig,resetFirebase,loginCajera,confirmCajera,closeModalCajera,logout,showPin,closePin,pinKey,pinDel,pinEnter,setFilterCat,renderProducts,addToCart,changeQty,clearCart,openCheckout,closeCheckout,selPay,calcChange,calcDiscount,applyPromo,setDiscType,completeSale,openMiHistorial,closeMiHistorial,openCorte,closeCorte,printCorte,openPrinterModal,closePrinterModal,forceUpdate,goTab,saveProduct,editProduct,cancelEdit,deleteProd,toggleProd,renderProdTable,addCat,delCat,renderSales,reprint,clearSales,exportCSV,saveSettings,switchTab,savePromo,deletePromo,renderPromosList,btConnect,btDisconnect,btTest,renderInventory,addInvItem,deleteInvItem,adjustStock,saveInvQty,startInvEdit,cancelInvEdit,saveInvEdit,openInvEmojiPicker,reloadInventory,loadInvLog,clearInvLog,sendTestEmail,sendStockAlert,addRecipeRow,removeRecipeRow,renderRecipe,sendDailyReport,previewReport,addEmpleado,removeEmpleado,updateEmpleado,onCommEmpChange,openGastos,closeGastos,gastosSwitchTab,saveGasto,sendTestReport,confirmarCorte,renderAdminGastos,openEditGasto,closeEditGasto,guardarEditGasto,deleteAdminGasto,closeDelGasto,confirmarDelGasto,openAnularVenta,closeAnularVenta,confirmarAnular,revertirAnulacion};
 })();
 document.addEventListener('DOMContentLoaded',()=>App.init());
 </script>
